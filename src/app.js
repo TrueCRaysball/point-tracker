@@ -830,6 +830,7 @@ function renderMobile(ev) {
   lucide.createIcons();
   hydrateThumbs(app);
   if (page === "overview") setupCarousel();
+  if (page === "settings") showVersionInSettings();
 }
 
 function mHeader() {
@@ -964,6 +965,14 @@ function mCalendar(ev) {
     ${items.length ? `<div class="m-cal-items">${items.map((it) => calPill(it, ev)).join("")}</div>` : `<div class="m-empty small">Nothing on this day.</div>`}`;
 }
 
+/** Fills in the version on the phone's About row. */
+async function showVersionInSettings() {
+  const v = tauri ? await tauri.core.invoke("app_info").catch(() => null)
+    : await fetch("version.json").then((r) => r.json()).catch(() => null);
+  const el = document.getElementById("m-version");
+  if (el && v?.version) el.textContent = `v${v.version}`;
+}
+
 function mSettings() {
   const start = pref(START_CARD, "30");
   return `${settingsPage(`
@@ -972,8 +981,9 @@ function mSettings() {
         <button class="${start === "30" ? "on" : ""}" data-action="pref" data-key="${START_CARD}" data-value="30">30 days</button>
         <button class="${start === "urgent" ? "on" : ""}" data-action="pref" data-key="${START_CARD}" data-value="urgent">Most urgent</button></div></div>
       <div class="field"><span>Last saved</span><span id="last-saved">${lastSavedText()}</span></div>
-      <div class="field"><button class="btn-subtle" data-action="about">${icon("info")} About Point Tracker</button></div>
     </div>`)}
+    <button class="sheet-item m-about-row" data-action="about">${icon("info")}<span>About Point Tracker</span>
+      <span class="m-version muted" id="m-version"></span>${icon("chevron-right")}</button>
     <div class="m-disclaimer">${disclaimerHTML()}</div>`;
 }
 

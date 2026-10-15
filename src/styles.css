@@ -572,3 +572,7 @@ iframe.viewer-body { background: #fff; }
 /* Phone sheets can be dragged down; the grip shows they can. */
 body.mobile .dialog > .sheet-grip { margin: 8px auto 0; }
 .sheet, body.mobile .dialog, .viewer { will-change: transform; overscroll-behavior: contain; }
+
+/* Phone Settings: About row */
+.m-about-row { margin: 4px 0 0; background: var(--panel); border-color: var(--panel-border); box-shadow: var(--shadow); }
+.m-about-row .m-version { flex: none; font: 500 14px var(--font-body); }
