@@ -1003,6 +1003,52 @@ function showSheet(html) {
   el.innerHTML = `<div class="scrim dim" data-action="close"></div><div class="sheet"><div class="sheet-grip"></div>${html}</div>`;
   lucide.createIcons();
   hydrateThumbs(el);
+  enableSwipeClose(el.querySelector(".sheet"), closeOverlay);
+}
+
+/** True if the open editor has changes that haven't been saved. */
+const editorDirty = () => {
+  const ed = editing();
+  return !!ed && (JSON.stringify(ed.item) !== overlay.original || overlay.added.length > 0);
+};
+
+/**
+ * Phone: drag a sheet down to close it. Only starts when the sheet is scrolled to the top,
+ * so scrolling inside it still works. canClose() can veto (e.g. unsaved changes).
+ */
+function enableSwipeClose(panel, close, canClose = () => true) {
+  if (!panel) return;
+  let startY = null, startT = 0, dy = 0, dragging = false;
+  panel.addEventListener("touchstart", (e) => {
+    startY = e.touches.length === 1 && panel.scrollTop <= 0 ? e.touches[0].clientY : null;
+    startT = Date.now(); dy = 0; dragging = false;
+  }, { passive: true });
+  panel.addEventListener("touchmove", (e) => {
+    if (startY === null) return;
+    dy = e.touches[0].clientY - startY;
+    if (!dragging) {
+      if (dy < -4) { startY = null; return; } // scrolling up: leave it alone
+      if (dy > 8) { dragging = true; panel.style.transition = "none"; }
+    }
+    if (dragging) {
+      e.preventDefault();
+      panel.style.transform = `translateY(${Math.max(0, dy)}px)`;
+    }
+  }, { passive: false });
+  const end = () => {
+    if (!dragging) { startY = null; return; }
+    dragging = false; startY = null;
+    const fast = dy / Math.max(1, Date.now() - startT) > 0.6;
+    panel.style.transition = "transform 0.2s ease-out";
+    if ((dy > 110 || (fast && dy > 40)) && canClose()) {
+      panel.style.transform = "translateY(105%)";
+      setTimeout(close, 180);
+    } else {
+      panel.style.transform = "";
+    }
+  };
+  panel.addEventListener("touchend", end);
+  panel.addEventListener("touchcancel", end);
 }
 
 /** Full-screen viewer for an attachment (web version). */
@@ -1011,6 +1057,7 @@ function showViewer(html) {
   const v = Object.assign(document.createElement("div"), { id: "viewer", className: "viewer", innerHTML: html });
   document.body.append(v);
   lucide.createIcons();
+  enableSwipeClose(v, () => v.remove());
 }
 
 // ---------- Overlays ----------
@@ -1049,9 +1096,15 @@ function showPopover(html, anchor, { side = "right", width = 340, menu = false }
 
 function showDialog(html, wide = false) {
   const el = document.getElementById("overlay");
-  el.innerHTML = `<div class="scrim dim"><div class="dialog ${wide ? "wide" : ""}">${html}</div></div>`;
+  const prevScroll = el.querySelector(".dialog")?.scrollTop ?? 0;
+  el.innerHTML = `<div class="scrim dim"><div class="dialog ${wide ? "wide" : ""}">${isMobile() ? `<div class="sheet-grip"></div>` : ""}${html}</div></div>`;
   lucide.createIcons();
   hydrateThumbs(el);
+  if (isMobile()) {
+    const panel = el.querySelector(".dialog");
+    if (overlay?.added) panel.scrollTop = prevScroll; // editor re-render: keep position
+    enableSwipeClose(panel, closeOverlay, () => !editorDirty() || confirm("Discard your changes?"));
+  }
 }
 
 const line = (label, value, cls = "") => `<div class="line"><span>${label}</span><span class="${cls}">${value}</span></div>`;
@@ -1115,7 +1168,7 @@ function confirmDelete(kind, id) {
 // ----- Entry editor -----
 
 function openEntryEditor(entry) {
-  overlay = { kind: "entry", entry: structuredClone(entry), isNew: !data.entries.some((e) => e.id === entry.id), added: [], removed: [] };
+  overlay = { kind: "entry", entry: structuredClone(entry), isNew: !data.entries.some((e) => e.id === entry.id), added: [], removed: [], original: JSON.stringify(entry) };
   renderEntryEditor();
 }
 
@@ -1174,7 +1227,7 @@ function renderEntryEditor() {
 // ----- Reprimand editor -----
 
 function openReprimandEditor(rep) {
-  overlay = { kind: "rep", rep: structuredClone(rep), isNew: !data.reprimands.some((r) => r.id === rep.id), added: [], removed: [] };
+  overlay = { kind: "rep", rep: structuredClone(rep), isNew: !data.reprimands.some((r) => r.id === rep.id), added: [], removed: [], original: JSON.stringify(rep) };
   renderReprimandEditor();
 }
 

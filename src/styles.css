@@ -568,3 +568,7 @@ body.mobile .checklist label { padding: 10px 12px; }
 .viewer-head .btn-subtle { color: #fff; }
 .viewer-body { flex: 1; min-height: 0; width: 100%; object-fit: contain; border: 0; background: #fff0; }
 iframe.viewer-body { background: #fff; }
+
+/* Phone sheets can be dragged down; the grip shows they can. */
+body.mobile .dialog > .sheet-grip { margin: 8px auto 0; }
+.sheet, body.mobile .dialog, .viewer { will-change: transform; overscroll-behavior: contain; }
