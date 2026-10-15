@@ -1416,6 +1416,8 @@ document.addEventListener("click", (ev) => {
     }
     case "m-cal-day": ui.calSelected = Number(t.dataset.day); render(); break;
     case "about": showAbout(); break;
+    case "update-now": location.reload(); break;
+    case "update-dismiss": document.getElementById("update-notice")?.remove(); break;
     case "page": ui.page = t.dataset.page; ui.expanded = null; closeOverlay(); render(); break;
     case "expand": ui.expanded = t.dataset.table; render(); break;
     case "collapse": ui.expanded = null; render(); break;
@@ -1672,8 +1674,38 @@ addEventListener("resize", async () => {
 });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyAppearance);
 
-// Home Screen (web) version: offline support. Skipped on desktop and on plain http (local testing).
-if (!tauri && "serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+// Home Screen (web) version: offline support and update notices. Skipped on desktop and on plain http
+// (local testing), except http://localhost/?sw for testing the update flow.
+const swAllowed = location.protocol === "https:" || (location.hostname === "localhost" && new URLSearchParams(location.search).has("sw"));
+if (!tauri && "serviceWorker" in navigator && swAllowed) setupUpdates();
+
+/**
+ * Checks for a newer version when the app opens, comes back to the foreground, and every 30 minutes.
+ * The new version downloads in the background; when it's ready, a notice asks to close and reopen.
+ */
+async function setupUpdates() {
+  const sw = navigator.serviceWorker;
+  const hadVersion = !!sw.controller; // false on the very first install: no notice then
+  let reg;
+  try { reg = await sw.register("sw.js"); } catch { return; }
+  sw.addEventListener("controllerchange", () => { if (hadVersion) showUpdateNotice(); });
+  const check = () => reg.update().catch(() => {});
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") check(); });
+  setInterval(check, 30 * 60 * 1000);
+}
+
+async function showUpdateNotice() {
+  if (document.getElementById("update-notice")) return;
+  const v = await fetch("version.json", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+  const n = Object.assign(document.createElement("div"), { id: "update-notice", className: "update-notice" });
+  n.innerHTML = `${icon("download")}
+    <div><b class="head">Update ready${v?.version ? ` · v${esc(v.version)} (Build ${esc(v.build)})` : ""}</b>
+      <div>Close and reopen Point Tracker to finish updating.</div></div>
+    <button class="btn-primary small" data-action="update-now">Update Now</button>
+    <button class="update-x" data-action="update-dismiss" aria-label="Dismiss">${icon("x")}</button>`;
+  document.body.append(n);
+  lucide.createIcons();
+}
 
 await load();
 if (env.migrated) persist(); // first launch: copy the Mac app's records into this app's own file

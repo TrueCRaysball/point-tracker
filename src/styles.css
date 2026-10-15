@@ -576,3 +576,17 @@ body.mobile .dialog > .sheet-grip { margin: 8px auto 0; }
 /* Phone Settings: About row */
 .m-about-row { margin: 4px 0 0; background: var(--panel); border-color: var(--panel-border); box-shadow: var(--shadow); }
 .m-about-row .m-version { flex: none; font: 500 14px var(--font-body); }
+
+/* "Update ready" notice (web / Home Screen version) */
+.update-notice {
+  position: fixed; z-index: 15; left: 12px; right: 12px; top: calc(10px + env(safe-area-inset-top));
+  max-width: 520px; margin: 0 auto; display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 14px;
+  border-radius: 14px; background: var(--popover); border: 1px solid color-mix(in srgb, var(--blue) 55%, transparent);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.4); font-size: 13px; animation: notice-in 0.25s ease-out;
+}
+.update-notice > svg { color: var(--blue); width: 22px; height: 22px; flex: none; }
+.update-notice > div { flex: 1; min-width: 0; }
+.update-notice .head { font-size: 14px; }
+.update-notice .btn-primary.small { padding: 7px 12px; font-size: 13px; flex: none; }
+.update-x { background: none; border: 0; padding: 4px; color: var(--text2); display: flex; }
+@keyframes notice-in { from { transform: translateY(-20px); opacity: 0; } to { transform: none; opacity: 1; } }
