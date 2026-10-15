@@ -590,3 +590,15 @@ body.mobile .dialog > .sheet-grip { margin: 8px auto 0; }
 .update-notice .btn-primary.small { padding: 7px 12px; font-size: 13px; flex: none; }
 .update-x { background: none; border: 0; padding: 4px; color: var(--text2); display: flex; }
 @keyframes notice-in { from { transform: translateY(-20px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Phone window cards: use the width. Oldest point + type on the left, drop-off on the right. */
+.m-cards .wcard .rows {
+  display: grid; grid-template-columns: 1fr 1fr; column-gap: 12px; row-gap: 6px;
+  grid-template-areas: "oldest drop" "type drop";
+}
+.m-cards .wcard .rows > * { grid-column: 1 / -1; }
+.m-cards .wcard .rows > .ir-oldest { grid-area: oldest; }
+.m-cards .wcard .rows > .ir-type { grid-area: type; }
+.m-cards .wcard .rows > .ir-drop { grid-area: drop; }
+.m-cards .wcard .irow .val { font-size: 14px; }
+.m-cards .wcard .irow .cap { font-size: 12px; }

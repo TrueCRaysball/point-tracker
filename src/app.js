@@ -537,9 +537,9 @@ function windowCard(w, asOfDay) {
     ${w.neutralized > 0 ? `<div class="muted" style="font-size:12px">+${E.fmtPts(w.neutralized)} used in reprimands</div>` : ""}
     <div class="rows">
       ${w.oldest ? `
-        <div class="irow">${icon("calendar")}<div><div class="cap">Oldest point</div><div class="val">${Day.short(Day.parse(w.oldest.date))}</div></div></div>
-        <div class="irow" style="align-items:center">${icon(TYPE_ICON[w.oldest.type])}<div class="val">${esc(E.displayType(w.oldest))}</div></div>
-        <div class="irow">${icon("clock")}<div><div class="cap">Drops off</div><div class="val">${Day.short(w.dropsOff)}</div><div class="muted" style="font-size:13px">(${E.relative(w.dropsOff, asOfDay)})</div></div></div>
+        <div class="irow ir-oldest">${icon("calendar")}<div><div class="cap">Oldest point</div><div class="val">${Day.short(Day.parse(w.oldest.date))}</div></div></div>
+        <div class="irow ir-type" style="align-items:center">${icon(TYPE_ICON[w.oldest.type])}<div class="val">${esc(E.displayType(w.oldest))}</div></div>
+        <div class="irow ir-drop">${icon("clock")}<div><div class="cap">Drops off</div><div class="val">${Day.short(w.dropsOff)}</div><div class="muted" style="font-size:13px">(${E.relative(w.dropsOff, asOfDay)})</div></div></div>
       ` : `<div class="irow" style="align-items:center">${icon("circle-check")}<div class="val">No active points</div></div>`}
       ${w.recentlyDropped
         .filter((d) => !data.confirmations.dropOffs.includes(E.dropOffKey(d.entry.id, w.rule.id)))
