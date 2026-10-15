@@ -1,0 +1,26 @@
+{
+  "productName": "Point Tracker Demo",
+  "identifier": "com.craysball.pointtracker.demo",
+  "app": {
+    "windows": [
+      {
+        "title": "Point Tracker Demo",
+        "width": 1500,
+        "height": 940,
+        "minWidth": 1100,
+        "minHeight": 820,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
+      }
+    ]
+  },
+  "bundle": {
+    "icon": [
+      "icons-demo/32x32.png",
+      "icons-demo/128x128.png",
+      "icons-demo/128x128@2x.png",
+      "icons-demo/icon.icns",
+      "icons-demo/icon.ico"
+    ]
+  }
+}

@@ -1,0 +1,138 @@
+{
+  "entries": [
+    {
+      "id": "CEB088A5-307F-4C4B-81C2-9BD7DC470FF0",
+      "date": "2025-11-20",
+      "type": "callSick",
+      "note": "",
+      "stringMode": "auto",
+      "otherLabel": "",
+      "otherPoints": 0,
+      "otherBreaksString": true,
+      "created": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "9A77B14B-3600-4464-A523-40BA9FEDFA02",
+      "date": "2025-11-21",
+      "type": "callSick",
+      "note": "",
+      "stringMode": "auto",
+      "otherLabel": "",
+      "otherPoints": 0,
+      "otherBreaksString": true,
+      "created": "2026-01-01T00:00:01Z"
+    },
+    {
+      "id": "BB0D093A-7B24-4CFF-B961-260A416F3677",
+      "date": "2025-12-01",
+      "type": "callPersonal",
+      "note": "",
+      "stringMode": "auto",
+      "otherLabel": "",
+      "otherPoints": 0,
+      "otherBreaksString": true,
+      "created": "2026-01-01T00:00:02Z"
+    },
+    {
+      "id": "91C26393-CDF2-4E81-A836-BCD1A0386B0C",
+      "date": "2025-12-10",
+      "type": "callSick",
+      "note": "Flu",
+      "stringMode": "auto",
+      "otherLabel": "",
+      "otherPoints": 0,
+      "otherBreaksString": true,
+      "created": "2026-01-01T00:00:03Z"
+    },
+    {
+      "id": "F00C4600-6866-4C6D-9064-4657CFBB4DAD",
+      "date": "2026-03-02",
+      "type": "callSick",
+      "note": "",
+      "stringMode": "auto",
+      "otherLabel": "",
+      "otherPoints": 0,
+      "otherBreaksString": true,
+      "created": "2026-01-01T00:00:04Z"
+    },
+    {
+      "id": "4BFD076B-93A2-4EF9-8E46-5C0A9D505116",
+      "date": "2026-03-03",
+      "type": "callSick",
+      "note": "",
+      "stringMode": "auto",
+      "otherLabel": "",
+      "otherPoints": 0,
+      "otherBreaksString": true,
+      "created": "2026-01-01T00:00:05Z"
+    },
+    {
+      "id": "67C34FEE-F437-4207-ACD7-257074724822",
+      "date": "2026-03-04",
+      "type": "worked",
+      "note": "",
+      "stringMode": "auto",
+      "otherLabel": "",
+      "otherPoints": 0,
+      "otherBreaksString": true,
+      "created": "2026-01-01T00:00:06Z"
+    },
+    {
+      "id": "849F5F9F-F8B8-4510-BB1A-1DAE6665041D",
+      "date": "2026-05-10",
+      "type": "callPersonal",
+      "note": "Car trouble",
+      "stringMode": "auto",
+      "otherLabel": "",
+      "otherPoints": 0,
+      "otherBreaksString": true,
+      "created": "2026-01-01T00:00:07Z"
+    },
+    {
+      "id": "1C5F83A6-01EA-447F-84B9-75D90BC8FD83",
+      "date": "2026-08-28",
+      "type": "callSick",
+      "note": "",
+      "stringMode": "auto",
+      "otherLabel": "",
+      "otherPoints": 0,
+      "otherBreaksString": true,
+      "created": "2026-01-01T00:00:08Z"
+    },
+    {
+      "id": "70F86AC7-93E7-49CA-B482-89826063C91A",
+      "date": "2026-08-29",
+      "type": "callSick",
+      "note": "",
+      "stringMode": "auto",
+      "otherLabel": "",
+      "otherPoints": 0,
+      "otherBreaksString": true,
+      "created": "2026-01-01T00:00:09Z"
+    },
+    {
+      "id": "E5CB2589-EAE0-42C9-9CE3-D7EAF4BD23A0",
+      "date": "2026-09-12",
+      "type": "ado",
+      "note": "",
+      "stringMode": "auto",
+      "otherLabel": "",
+      "otherPoints": 0,
+      "otherBreaksString": true,
+      "created": "2026-01-01T00:00:10Z"
+    }
+  ],
+  "reprimands": [
+    {
+      "id": "7E4ABD9A-E7CA-41CD-B8C1-E2B5ED1362F9",
+      "signedDate": "2025-12-15",
+      "ruleDays": 30,
+      "pointEntryIDs": [
+        "CEB088A5-307F-4C4B-81C2-9BD7DC470FF0",
+        "BB0D093A-7B24-4CFF-B961-260A416F3677",
+        "91C26393-CDF2-4E81-A836-BCD1A0386B0C"
+      ],
+      "note": "Sample reprimand"
+    }
+  ]
+}

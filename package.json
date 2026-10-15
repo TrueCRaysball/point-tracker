@@ -1,0 +1,26 @@
+{
+  "name": "point-tracker",
+  "private": true,
+  "version": "1.2.0",
+  "scripts": {
+    "tauri": "tauri",
+    "vendor": "node scripts/vendor.mjs",
+    "stamp": "node scripts/stamp.mjs",
+    "build": "node scripts/build.mjs",
+    "build:demo": "node scripts/build.mjs demo",
+    "build:release": "node scripts/build.mjs release",
+    "web": "node scripts/web.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  },
+  "dependencies": {
+    "@fontsource-variable/cabin": "^5.3.0",
+    "@fontsource-variable/outfit": "^5.3.0",
+    "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
+    "lucide": "^0.460.0"
+  },
+  "type": "module",
+  "description": "Attendance points and reprimand tracker.",
+  "author": "CRaysball Softworks"
+}

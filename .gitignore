@@ -1,0 +1,17 @@
+# Dependencies and build output
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+builds/
+
+# Generated per build
+src-tauri/tauri.build.conf.json
+src/sw.js
+src/version.json
+
+# Local-only settings
+local.config.json
+
+# OS clutter
+.DS_Store
+Thumbs.db

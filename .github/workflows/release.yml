@@ -1,0 +1,99 @@
+# Builds Point Tracker for every supported platform and attaches the installers to a draft GitHub release.
+# Trigger: push a tag like v1.2.0 (or run it manually from the Actions tab).
+#
+# Supported: macOS Apple Silicon · Windows 64-bit and 32-bit · Linux 64-bit (x86_64 and ARM64).
+# Builds are unsigned for now; see README for first-launch steps.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple Silicon)
+            runner: macos-latest
+            target: aarch64-apple-darwin
+            bundles: app,dmg
+          - name: Windows 64-bit
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: nsis,msi
+          - name: Windows 32-bit
+            runner: windows-latest
+            target: i686-pc-windows-msvc
+            bundles: nsis,msi
+          - name: Linux x86_64
+            runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            bundles: appimage,deb,rpm
+          - name: Linux ARM64
+            runner: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+            bundles: appimage,deb,rpm
+
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    env:
+      # Build numbers use the maintainer's local time (YYMMDDHHmm).
+      TZ: America/New_York
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux system libraries
+        if: startsWith(matrix.runner, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.target }}
+
+      - run: npm ci
+
+      - name: Stamp build number
+        run: node scripts/stamp.mjs
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('v__VERSION__-build.{0}', env.PT_BUILD_NUMBER) }}
+          releaseName: Point Tracker v__VERSION__
+          releaseBody: |
+            **Point Tracker v__VERSION__** (build ${{ env.PT_BUILD_NUMBER }})
+
+            Download the file for your computer:
+            - **Mac (Apple Silicon, M1 or newer):** `.dmg`
+            - **Windows 64-bit:** `x64-setup.exe` (or `x64_en-US.msi`)
+            - **Windows 32-bit:** `x86-setup.exe` (or `x86_en-US.msi`)
+            - **Linux x86_64:** `amd64.AppImage`, `amd64.deb` or `x86_64.rpm`
+            - **Linux ARM64:** `aarch64.AppImage`, `arm64.deb` or `aarch64.rpm`
+
+            These builds are not code-signed yet, so your computer will warn you the first time.
+            See the README for how to open it.
+
+            Not affiliated with or endorsed by The Walt Disney Company (TWDC).
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --config src-tauri/tauri.build.conf.json
