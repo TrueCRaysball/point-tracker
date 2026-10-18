@@ -290,7 +290,7 @@ svg.lucide-cross { fill: currentColor; }
 .cal-dow > div { font: 600 12px var(--font-head); color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; padding: 0 8px; }
 .cal-grid { flex: 1; min-height: 0; grid-template-rows: repeat(6, minmax(0, 1fr)); }
 .cal-cell {
-  border-radius: 10px; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow: hidden;
+  border-radius: 10px; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow: visible;
   background: rgba(var(--ink), 0.035); border: 1px solid rgba(var(--ink), 0.06);
 }
 .cal-cell.weekend { background: rgba(var(--ink), 0.02); }
@@ -608,3 +608,24 @@ body.mobile .dialog > .sheet-grip { margin: 8px auto 0; }
 .banner .btn-primary.small { padding: 7px 12px; font-size: 13px; }
 body.mobile .banner-actions { width: 100%; justify-content: flex-end; }
 .att-file { color: var(--blue); }
+
+/* Medical leave as an all-day event bar. Cells have 6px padding + 1px border and a 6px gap,
+   so the bar reaches 10px past each side to join its neighbours into one continuous bar. */
+.cal-leave {
+  --c: var(--amber);
+  position: relative; z-index: 1; display: flex; align-items: center; gap: 5px; height: 20px; flex: none;
+  margin: 0 -10px; padding: 0 10px; border: 0; border-radius: 0; white-space: nowrap; overflow: visible;
+  background: color-mix(in srgb, var(--c) 32%, var(--panel)); color: var(--text); font: 600 11px var(--font-head); text-align: left;
+}
+.cal-leave svg { color: var(--c); width: 13px; height: 13px; flex: none; }
+.cal-leave.start { margin-left: 0; padding-left: 7px; border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
+.cal-leave.end { margin-right: 0; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+.cal-leave.wk-start:not(.start) { margin-left: -7px; }
+.cal-leave.wk-end:not(.end) { margin-right: -7px; }
+.cal-leave:hover { filter: brightness(1.12); }
+
+.m-cal-cell { position: relative; overflow: visible; }
+/* Reaches past the 4px gap on both sides so neighbouring days join into one line. */
+.m-cal-leave { position: absolute; bottom: 2px; left: -5px; right: -5px; height: 4px; background: var(--amber); z-index: 1; }
+.m-cal-leave.start { left: 5px; border-top-left-radius: 3px; border-bottom-left-radius: 3px; }
+.m-cal-leave.end { right: 5px; border-top-right-radius: 3px; border-bottom-right-radius: 3px; }

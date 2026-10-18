@@ -832,6 +832,23 @@ function calendarItems(ev) {
   return byDay;
 }
 
+/**
+ * Days covered by medical leave, like an all-day event: from the start date through the day before
+ * the first shift back (ongoing leaves run through today, or the viewed date if later).
+ */
+function leaveDays(asOfDay) {
+  const map = new Map();
+  for (const l of data.leaves ?? []) {
+    const s = Day.parse(l.startDate);
+    const e = l.returnDate ? Day.parse(l.returnDate) - 1 : Math.max(Day.today(), asOfDay);
+    for (let d = s; d <= e && d - s < 800; d++) {
+      if (!map.has(d)) map.set(d, []);
+      map.get(d).push({ leave: l, start: d === s, end: d === e, day: d - s + 1, ongoing: !l.returnDate });
+    }
+  }
+  return map;
+}
+
 /** Color class for a calendar item. */
 function calClass(it, ev) {
   if (it.kind === "rep") return "c-red";
@@ -855,6 +872,7 @@ function calendarPage(ev) {
   const start = first - fp.dow; // the Sunday on or before the 1st
   const today = Day.today();
   const byDay = calendarItems(ev);
+  const leaves = leaveDays(ev.asOf);
 
   let monthCalls = 0, monthPoints = 0;
   for (const [d, items] of byDay) {
@@ -867,8 +885,12 @@ function calendarPage(ev) {
   const cells = Array.from({ length: 42 }, (_, i) => {
     const d = start + i, p = dayParts(d), items = byDay.get(d) ?? [];
     const cls = [items.some((it) => it.kind === "entry") ? "has" : "", p.m !== fp.m ? "out" : "", d === today ? "today" : "", d === ev.asOf && d !== today ? "viewed" : "", p.dow === 0 || p.dow === 6 ? "weekend" : ""].join(" ");
+    const bars = (leaves.get(d) ?? []).map((x) => `<button class="cal-leave ${x.start ? "start" : ""} ${x.end ? "end" : ""} ${p.dow === 0 ? "wk-start" : ""} ${p.dow === 6 ? "wk-end" : ""}"
+        data-action="leave-edit" data-id="${x.leave.id}" title="Medical leave · day ${x.day}${x.ongoing ? " (ongoing)" : ""}">
+        ${x.start || p.dow === 0 ? `${icon("hospital")}<span>Medical leave${x.ongoing && x.start ? " (ongoing)" : ""}</span>` : ""}</button>`).join("");
     return `<div class="cal-cell ${cls}" data-calday="${d}" title="Double-click to add an entry">
       <div class="cal-num">${p.d === 1 ? `${MONTH_NAMES[p.m].slice(0, 3)} ` : ""}${p.d}</div>
+      ${bars}
       <div class="cal-items">${items.map(pill).join("")}</div>
     </div>`;
   }).join("");
@@ -891,6 +913,7 @@ function calendarPage(ev) {
       <span class="cal-pill c-gray">${icon("cross")}<span>Sick, continues occurrence</span></span>
       <span class="cal-pill c-orange">${icon("user")}<span>Personal</span></span>
       <span class="cal-pill c-red">${icon("gavel")}<span>Reprimand signed</span></span>
+      <span class="cal-pill c-amber">${icon("hospital")}<span>Medical leave</span></span>
       <span class="spacer"></span><span>Click an item for details · double-click a day to add an entry</span>
     </div>
     <div class="cal-dow">${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => `<div>${d}</div>`).join("")}</div>
@@ -1041,15 +1064,20 @@ function mCalendar(ev) {
   const first = ui.calMonth ?? monthStart(asOf());
   const fp = dayParts(first), start = first - fp.dow, today = Day.today();
   const byDay = calendarItems(ev);
+  const leaves = leaveDays(ev.asOf);
   const inMonth = (d) => dayParts(d).m === fp.m && dayParts(d).y === fp.y;
   const sel = ui.calSelected !== null && inMonth(ui.calSelected) ? ui.calSelected : inMonth(today) ? today : first;
   const cells = Array.from({ length: 42 }, (_, i) => {
     const d = start + i, p = dayParts(d), items = byDay.get(d) ?? [];
     const cls = [p.m !== fp.m ? "out" : "", d === today ? "today" : "", d === sel ? "sel" : ""].join(" ");
+    const lv = leaves.get(d)?.[0];
     return `<button class="m-cal-cell ${cls}" data-action="m-cal-day" data-day="${d}">
-      <span>${p.d}</span><span class="m-cal-dots">${items.slice(0, 3).map((it) => `<i class="${calClass(it, ev)}"></i>`).join("")}</span></button>`;
+      <span>${p.d}</span><span class="m-cal-dots">${items.slice(0, 3).map((it) => `<i class="${calClass(it, ev)}"></i>`).join("")}</span>
+      ${lv ? `<span class="m-cal-leave ${lv.start || p.dow === 0 ? "start" : ""} ${lv.end || p.dow === 6 ? "end" : ""}"></span>` : ""}</button>`;
   }).join("");
   const items = byDay.get(sel) ?? [];
+  const selLeaves = (leaves.get(sel) ?? []).map((x) => `<button class="cal-pill c-amber" data-action="leave-edit" data-id="${x.leave.id}">
+    ${icon("hospital")}<span>Medical leave · day ${x.day}${x.ongoing ? " (ongoing)" : ""}</span></button>`).join("");
   return `
     <div class="m-section-head">
       <button class="m-iconbtn" data-action="cal-nav" data-delta="-1" aria-label="Previous month">${icon("chevron-left")}</button>
@@ -1062,7 +1090,7 @@ function mCalendar(ev) {
     </div>
     <div class="m-section-head small"><b class="head">${Day.long(sel)}</b><span class="spacer"></span>
       <button class="btn-subtle small" data-action="cal-today">Today</button></div>
-    ${items.length ? `<div class="m-cal-items">${items.map((it) => calPill(it, ev)).join("")}</div>` : `<div class="m-empty small">Nothing on this day.</div>`}`;
+    ${items.length || selLeaves ? `<div class="m-cal-items">${selLeaves}${items.map((it) => calPill(it, ev)).join("")}</div>` : `<div class="m-empty small">Nothing on this day.</div>`}`;
 }
 
 /** Fills in the version on the phone's About row. */
