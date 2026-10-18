@@ -127,15 +127,22 @@ fn unique_name(ext: &str) -> String {
 }
 
 /// Copies a file the user picked (or dropped) into the attachments folder.
+/// allow_any: any file type (medical leave documentation); otherwise images, plus PDFs if allow_pdf.
 #[tauri::command]
-fn import_attachment(app: AppHandle, path: String, allow_pdf: bool) -> Result<Attachment, String> {
+fn import_attachment(app: AppHandle, path: String, allow_pdf: bool, allow_any: Option<bool>) -> Result<Attachment, String> {
     let src = PathBuf::from(&path);
-    let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-    let kind = kind_for(&ext).ok_or("Only images (PNG, JPG, GIF, WebP, BMP, HEIC) and PDFs can be attached.")?;
-    if kind == "pdf" && !allow_pdf {
+    let raw_ext = src.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    // Keep stored names simple: letters/digits only, short.
+    let ext: String = raw_ext.chars().filter(|c| c.is_ascii_alphanumeric()).take(10).collect();
+    let kind = match kind_for(&ext) {
+        Some(k) => k,
+        None if allow_any.unwrap_or(false) => "file",
+        None => return Err("Only images (PNG, JPG, GIF, WebP, BMP, HEIC) and PDFs can be attached.".into()),
+    };
+    if kind == "pdf" && !allow_pdf && !allow_any.unwrap_or(false) {
         return Err("Only images can be attached here.".into());
     }
-    let file = unique_name(&ext);
+    let file = unique_name(if ext.is_empty() { "bin" } else { &ext });
     fs::copy(&src, attachments_dir(&app)?.join(&file)).map_err(|e| e.to_string())?;
     let name = src.file_name().and_then(|n| n.to_str()).unwrap_or(&file).to_string();
     Ok(Attachment { file, name, kind: kind.into() })
@@ -179,7 +186,7 @@ fn delete_attachment(app: AppHandle, file: String) -> Result<(), String> {
 /// Every attachment file name referenced by entries and reprimands.
 fn referenced_files(data: &serde_json::Value) -> Vec<String> {
     let mut files = Vec::new();
-    for list in ["entries", "reprimands"] {
+    for list in ["entries", "reprimands", "leaves"] {
         for item in data[list].as_array().into_iter().flatten() {
             for att in item["attachments"].as_array().into_iter().flatten() {
                 if let Some(f) = att["file"].as_str() {

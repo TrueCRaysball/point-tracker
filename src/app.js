@@ -52,6 +52,8 @@ async function load() {
   data.confirmations ??= {};
   data.confirmations.dropOffs ??= [];
   data.confirmations.expirations ??= [];
+  data.confirmations.leaveDismissed ??= [];
+  data.leaves ??= [];
 }
 function persist() {
   data.updatedAt = stamp();
@@ -76,7 +78,9 @@ function attachmentList(list, { removable = false } = {}) {
   return `<div class="attachments">${list.map((a) => `
     <div class="att" title="${esc(a.name)}">
       <button class="att-open" data-action="open-attachment" data-file="${esc(a.file)}">
-        ${a.kind === "image" ? `<img data-thumb="${esc(a.file)}" alt="">` : `<span class="att-pdf">${icon("file-text")}<span>PDF</span></span>`}
+        ${a.kind === "image" ? `<img data-thumb="${esc(a.file)}" alt="">`
+          : a.kind === "pdf" ? `<span class="att-pdf">${icon("file-text")}<span>PDF</span></span>`
+          : `<span class="att-pdf att-file">${icon("file")}<span>${esc((a.name.split(".").pop() || "FILE").toUpperCase().slice(0, 5))}</span></span>`}
         <span class="att-name">${esc(a.name)}</span>
       </button>
       ${removable ? `<button class="att-remove" data-action="remove-attachment" data-file="${esc(a.file)}" title="Remove">${icon("x")}</button>` : ""}
@@ -117,9 +121,14 @@ async function openAttachment(file) {
   if (tauri) return tauri.core.invoke("open_attachment", { file });
   const blob = await WS.getFile(file);
   if (!blob) return alert("That file couldn't be found.");
-  const att = [...data.entries, ...data.reprimands].flatMap((x) => x.attachments ?? []).find((a) => a.file === file);
+  const att = [...data.entries, ...data.reprimands, ...(data.leaves ?? [])].flatMap((x) => x.attachments ?? []).find((a) => a.file === file);
   const url = URL.createObjectURL(blob);
   const isPdf = blob.type === "application/pdf" || file.endsWith(".pdf");
+  if (att?.kind === "file") {
+    const f = new File([blob], att.name, { type: blob.type });
+    if (navigator.canShare?.({ files: [f] })) return navigator.share({ files: [f] }).catch(() => {});
+    return Object.assign(document.createElement("a"), { href: url, download: att.name }).click();
+  }
   showViewer(`
     <div class="viewer-head"><b class="head">${esc(att?.name ?? file)}</b><span class="spacer"></span>
       ${navigator.canShare ? `<button class="btn-subtle small" data-action="share-attachment" data-file="${esc(file)}">${icon("share")} Share</button>` : ""}
@@ -129,14 +138,15 @@ async function openAttachment(file) {
 
 async function shareAttachment(file) {
   const blob = await WS.getFile(file);
-  const att = [...data.entries, ...data.reprimands].flatMap((x) => x.attachments ?? []).find((a) => a.file === file);
+  const att = [...data.entries, ...data.reprimands, ...(data.leaves ?? [])].flatMap((x) => x.attachments ?? []).find((a) => a.file === file);
   const f = new File([blob], att?.name ?? file, { type: blob.type });
   if (navigator.canShare?.({ files: [f] })) await navigator.share({ files: [f] }).catch(() => {});
 }
 
 /** The item being edited (entry or reprimand) and whether it takes PDFs. */
 const editing = () => overlay?.kind === "entry" ? { item: overlay.entry, pdf: false, rerender: renderEntryEditor }
-  : overlay?.kind === "rep" ? { item: overlay.rep, pdf: true, rerender: renderReprimandEditor } : null;
+  : overlay?.kind === "rep" ? { item: overlay.rep, pdf: true, rerender: renderReprimandEditor }
+  : overlay?.kind === "leave" ? { item: overlay.leave, pdf: true, any: true, rerender: renderLeaveEditor } : null;
 
 function addAttachments(list) {
   const ed = editing();
@@ -149,12 +159,12 @@ function addAttachments(list) {
 const extOf = (name) => (name.split(".").pop() || "").toLowerCase();
 const webName = (ext) => `${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 8)}.${ext}`;
 
-/** Stores browser File/Blob objects (web version). */
-async function storeWebFiles(files, allowPdf) {
+/** Stores browser File/Blob objects (web version). allowAny: any file type (leave documentation). */
+async function storeWebFiles(files, allowPdf, allowAny = false) {
   const added = [];
   for (const f of files) {
-    const ext = f.type === "application/pdf" ? "pdf" : extOf(f.name || "") || (f.type.split("/")[1] ?? "png");
-    const kind = ext === "pdf" ? "pdf" : f.type.startsWith("image/") || IMAGE_EXTS.includes(ext) ? "image" : null;
+    const ext = (f.type === "application/pdf" ? "pdf" : extOf(f.name || "") || (f.type.split("/")[1] ?? "bin")).replace(/[^a-z0-9]/g, "").slice(0, 10) || "bin";
+    const kind = ext === "pdf" ? "pdf" : f.type.startsWith("image/") || IMAGE_EXTS.includes(ext) ? "image" : allowAny ? "file" : null;
     if (!kind || (kind === "pdf" && !allowPdf)) { alert(`${f.name || "That file"} can't be attached here.`); continue; }
     const file = webName(ext === "jpeg" ? "jpg" : ext);
     await WS.putFile(file, f);
@@ -168,12 +178,12 @@ async function pickAttachments() {
   if (!ed) return;
   if (tauri) {
     const exts = ed.pdf ? [...IMAGE_EXTS, "pdf"] : IMAGE_EXTS;
-    const picked = await tauri.dialog.open({ multiple: true, filters: [{ name: ed.pdf ? "Images and PDFs" : "Images", extensions: exts }] });
+    const picked = await tauri.dialog.open({ multiple: true, ...(ed.any ? {} : { filters: [{ name: ed.pdf ? "Images and PDFs" : "Images", extensions: exts }] }) });
     return importPaths([picked].flat().filter(Boolean));
   }
   // Web: the system picker (Photos, camera or Files on a phone).
-  const input = Object.assign(document.createElement("input"), { type: "file", multiple: true, accept: ed.pdf ? "image/*,application/pdf" : "image/*" });
-  input.onchange = async () => addAttachments(await storeWebFiles([...input.files], ed.pdf));
+  const input = Object.assign(document.createElement("input"), { type: "file", multiple: true, ...(ed.any ? {} : { accept: ed.pdf ? "image/*,application/pdf" : "image/*" }) });
+  input.onchange = async () => addAttachments(await storeWebFiles([...input.files], ed.pdf, ed.any));
   input.click();
 }
 
@@ -182,7 +192,7 @@ async function importPaths(paths) {
   if (!ed) return;
   const added = [];
   for (const path of paths) {
-    try { added.push(await tauri.core.invoke("import_attachment", { path, allowPdf: ed.pdf })); }
+    try { added.push(await tauri.core.invoke("import_attachment", { path, allowPdf: ed.pdf, allowAny: !!ed.any })); }
     catch (err) { alert(err); }
   }
   addAttachments(added);
@@ -274,7 +284,7 @@ const blobToBase64 = (blob) => new Promise((resolve) => {
   r.onload = () => resolve(String(r.result).split(",")[1]);
   r.readAsDataURL(blob);
 });
-const referencedFiles = (d) => [...d.entries, ...d.reprimands].flatMap((x) => x.attachments ?? []).map((a) => a.file);
+const referencedFiles = (d) => [...d.entries, ...d.reprimands, ...(d.leaves ?? [])].flatMap((x) => x.attachments ?? []).map((a) => a.file);
 
 async function exportBackup() {
   if (!tauri) {
@@ -590,8 +600,98 @@ function reprimandExpire(ev) {
   </div>`;
 }
 
+// ---------- Medical leave ----------
+
+/** Call-ins that went past the occurrence limit (one per occurrence), up to the viewed date. */
+function leaveTriggers(ev) {
+  const max = ev.settings.maxSickString;
+  return ev.entries.filter((e) => {
+    const x = ev.evals.get(e.id);
+    return x?.medicalLeave && x.stringPosition === max + 1 && Day.parse(e.date) <= ev.asOf;
+  });
+}
+const leaveFor = (entryId) => data.leaves.find((l) => l.triggerEntryId === entryId);
+const onLeaveNow = (l, asOfDay) => Day.parse(l.startDate) <= asOfDay && (!l.returnDate || Day.parse(l.returnDate) > asOfDay);
+/** How long an unconfirmed trigger keeps asking (days). */
+const LEAVE_CONFIRM_DAYS = 60;
+
+function leaveBanners(ev) {
+  const out = [];
+  for (const t of leaveTriggers(ev)) {
+    if (leaveFor(t.id) || data.confirmations.leaveDismissed.includes(t.id) || ev.asOf - Day.parse(t.date) > LEAVE_CONFIRM_DAYS) continue;
+    out.push(`<div class="banner c-red">${icon("hospital")}<span><b>Medical leave triggered:</b> call-in ${ev.settings.maxSickString + 1} of a sick occurrence on ${Day.long(Day.parse(t.date))}. Confirm once it's official.</span>
+      <span class="spacer"></span><span class="banner-actions">
+      <button class="btn-subtle" data-action="leave-dismiss" data-id="${t.id}" title="It didn't become a medical leave">Dismiss</button>
+      <button class="btn-primary small" data-action="leave-confirm" data-id="${t.id}">${icon("check")} Confirm Medical Leave</button></span></div>`);
+  }
+  for (const l of data.leaves.filter((l) => onLeaveNow(l, ev.asOf))) {
+    const day = ev.asOf - Day.parse(l.startDate) + 1, docs = l.attachments?.length ?? 0;
+    out.push(`<div class="banner c-amber">${icon("hospital")}<span><b>On medical leave</b> since ${Day.long(Day.parse(l.startDate))} · day ${day}${docs ? ` · ${docs} document${docs === 1 ? "" : "s"}` : ""}</span>
+      <span class="spacer"></span><span class="banner-actions">
+      <button class="btn-subtle" data-action="leave-edit" data-id="${l.id}">${icon("paperclip")} Documents</button>
+      <button class="btn-primary small" data-action="leave-return" data-id="${l.id}">${icon("briefcase")} Return to Work</button></span></div>`);
+  }
+  return out;
+}
+
+function openLeaveEditor(leave) {
+  overlay = { kind: "leave", leave: structuredClone(leave), added: [], removed: [], original: JSON.stringify(leave) };
+  renderLeaveEditor();
+}
+
+function renderLeaveEditor() {
+  const l = overlay.leave;
+  const trigger = data.entries.find((e) => e.id === l.triggerEntryId);
+  showDialog(`
+    <div class="form">
+      <h2>Medical Leave</h2>
+      <div class="group">
+        <div class="field"><span>Leave started</span><input type="date" data-leave="startDate" value="${esc(l.startDate)}"></div>
+        ${trigger ? `<div class="field"><span>Triggered by</span><span>Sick call-in on ${Day.short(Day.parse(trigger.date))}</span></div>` : ""}
+        <div class="field"><span>Confirmed official</span><span>${l.confirmedAt ? fmtDateTime(l.confirmedAt.slice(0, 10)) : "—"}</span></div>
+        <div class="field"><span>First shift back</span><span>
+          <input type="date" data-leave="returnDate" value="${esc(l.returnDate ?? "")}">
+          <input type="text" class="time-text" data-leave-time="returnShiftStart" value="${esc(fmtTime(l.returnShiftStart))}" placeholder="7:00 AM"></span></div>
+        <div class="note" style="padding-top:0">Leave "First shift back" empty while you're still on leave.</div>
+      </div>
+      <div class="group"><h3>Documentation (optional)</h3>
+        <div class="field" style="flex-direction:column;align-items:stretch;gap:8px">
+          <span style="display:flex;align-items:center">Any files about the leave: PDFs, images, documents<span class="spacer"></span>
+            <button class="btn-subtle small" data-action="add-attachment">${icon("paperclip")} Add Files…</button></span>
+          ${attachmentList(l.attachments, { removable: true })}
+          ${isMobile() ? "" : `<span class="note" style="padding:0">You can also paste an image (⌘V / Ctrl+V)${tauri ? " or drag files here" : ""}.</span>`}
+        </div>
+        <div class="field" style="flex-direction:column;align-items:stretch"><span>Note</span><textarea rows="3" data-leave="note">${esc(l.note ?? "")}</textarea></div>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn-subtle btn-danger" data-action="leave-remove" data-id="${l.id}">Remove Leave Record…</button>
+      <span class="spacer"></span>
+      <button class="btn-subtle" data-action="close">Cancel</button>
+      <button class="btn-primary" data-action="save-leave">Save</button>
+    </div>`, true);
+}
+
+function showReturnToWork(leave) {
+  overlay = { kind: "return", leaveId: leave.id };
+  showDialog(`
+    <div class="form">
+      <h2>Return to Work</h2>
+      <div>On medical leave since ${Day.long(Day.parse(leave.startDate))}. When is your first shift back?</div>
+      <div class="group">
+        <div class="field"><span>First shift back</span><input type="date" id="return-date" value="${Day.iso(asOf())}"></div>
+        <div class="field"><span>Shift starts (optional)</span><input type="text" class="time-text" id="return-time" placeholder="7:00 AM"></div>
+      </div>
+      <div class="note" style="padding:0">This ends the leave and logs a "Worked / Returned" day, which closes the sick occurrence.</div>
+    </div>
+    <div class="dialog-actions"><span class="spacer"></span>
+      <button class="btn-subtle" data-action="close">Cancel</button>
+      <button class="btn-primary" data-action="leave-return-save" data-id="${leave.id}">${icon("briefcase")} Return to Work</button>
+    </div>`);
+}
+
 function banners(ev) {
-  const s = ev.settings, out = [];
+  const s = ev.settings, out = leaveBanners(ev);
   for (const g of ev.recentlyExpired.filter((g) => !data.confirmations.expirations.includes(E.expiryKey(g)))) {
     const n = g.reprimands.length;
     out.push(`<div class="banner c-amber">${icon("gavel")}<span>${n === 1 ? "Your reprimand" : `Your ${n} reprimands`} expired ${E.relative(g.expires, ev.asOf)} (${Day.long(g.expires)}). Double-check with leadership before relying on this.</span><span class="spacer"></span><button class="btn-subtle" data-action="confirm-expiry" data-key="${E.expiryKey(g)}">${icon("check")} Confirmed with leadership</button></div>`);
@@ -601,7 +701,7 @@ function banners(ev) {
   }
   if (ev.stringOpenThrough !== null) {
     const n = ev.string.count, through = Day.short(ev.stringOpenThrough);
-    if (n > s.maxSickString) out.push(`<div class="banner c-red">${icon("hospital")}<span>This sick occurrence has ${n} call-ins. That's past the limit of ${s.maxSickString}, so medical leave applies.</span></div>`);
+    if (n > s.maxSickString) { /* covered by the medical leave banners */ }
     else if (n === s.maxSickString) out.push(`<div class="banner c-amber">${icon("hospital")}<span>Sick occurrence: ${n} of ${s.maxSickString}. Another sick call through ${through} would be call-in ${n + 1} and trigger medical leave.</span></div>`);
     else out.push(`<div class="banner c-blue"><span class="bub">i</span><span>Sick occurrence open: ${n} of ${s.maxSickString}. A sick call through ${through} continues it with no new point.</span></div>`);
   }
@@ -1130,7 +1230,13 @@ function entryInfo(e) {
   html += line("Points", e.pointsOverride != null && e.pointsOverride !== x?.basePoints ? `${E.fmtPts(p)} (override; rules say ${E.fmtPts(x?.basePoints ?? 0)})` : E.fmtPts(p));
   if (x?.stringNumber) html += line("Occurrence", `${x.stringNumber} in ${longest} days`);
   if (x?.stringPosition) html += line("Call-in", `${x.stringPosition} of ${ev.settings.maxSickString} in this occurrence`, x.medicalLeave ? "red" : "");
-  if (x?.medicalLeave) html += line("", "Medical leave", "red");
+  if (x?.medicalLeave) {
+    const l = leaveFor(e.id);
+    html += l
+      ? line("Medical leave", `${Day.short(Day.parse(l.startDate))} – ${l.returnDate ? Day.short(Day.parse(l.returnDate)) : "ongoing"}${l.attachments?.length ? ` · ${l.attachments.length} document${l.attachments.length === 1 ? "" : "s"}` : ""}<br>
+          <button class="btn-subtle small" style="margin-top:6px" data-action="leave-edit" data-id="${l.id}">${icon("hospital")} Leave Details…</button>`)
+      : line("", "Medical leave triggered", "red");
+  }
   if (used) html += line("Reprimand", detailsText(e, ev).split(" · ").find((t) => t.startsWith("Used in reprimand")) ?? "Used in a reprimand");
   if (e.shiftStart || e.shiftEnd) html += line("Shift", [fmtTime(e.shiftStart), fmtTime(e.shiftEnd)].filter(Boolean).join(" – "));
   if (e.submittedAt) html += line("Submitted", `${fmtDateTime(e.submittedAt)} <span class="muted">(CastLife)</span>`);
@@ -1416,6 +1522,50 @@ document.addEventListener("click", (ev) => {
     }
     case "m-cal-day": ui.calSelected = Number(t.dataset.day); render(); break;
     case "about": showAbout(); break;
+    case "leave-confirm": {
+      const trig = data.entries.find((e) => e.id === t.dataset.id);
+      if (!trig) break;
+      data.leaves.push({ id: uuid(), triggerEntryId: trig.id, startDate: trig.date, confirmedAt: stamp(), attachments: [], note: "" });
+      save();
+      break;
+    }
+    case "leave-dismiss": data.confirmations.leaveDismissed.push(t.dataset.id); save(); break;
+    case "leave-edit": { const l = data.leaves.find((x) => x.id === t.dataset.id); closeOverlay(); if (l) openLeaveEditor(l); break; }
+    case "leave-return": { const l = data.leaves.find((x) => x.id === t.dataset.id); if (l) showReturnToWork(l); break; }
+    case "leave-return-save": {
+      const l = data.leaves.find((x) => x.id === t.dataset.id);
+      const date = document.getElementById("return-date").value;
+      const time = parseTime(document.getElementById("return-time").value);
+      if (!l || !date) { alert("Choose the date of your first shift back."); break; }
+      if (time === null) { alert("That shift time couldn't be read. Try 7:00 AM, 7am or 15:30."); break; }
+      l.returnDate = date;
+      if (time) l.returnShiftStart = time; else delete l.returnShiftStart;
+      // Returning to work closes the sick occurrence (hidden "Worked / Returned" entry).
+      data.entries.push({ id: uuid(), date, type: "worked", note: "Returned from medical leave", stringMode: "auto", otherLabel: "", otherPoints: 0,
+        otherBreaksString: true, created: stamp(), leaveId: l.id, ...(time ? { shiftStart: time } : {}) });
+      closeOverlay(); save();
+      break;
+    }
+    case "save-leave": {
+      const l = overlay.leave;
+      if (document.querySelector("#overlay .time-text.invalid")) { alert("The shift time couldn't be read. Try 7:00 AM, 7am or 15:30."); break; }
+      if (!l.startDate) { alert("Choose when the leave started."); break; }
+      deleteFiles(overlay.removed); overlay.added = [];
+      const i = data.leaves.findIndex((x) => x.id === l.id);
+      if (!l.returnDate) delete l.returnDate;
+      i >= 0 ? (data.leaves[i] = l) : data.leaves.push(l);
+      closeOverlay(); save();
+      break;
+    }
+    case "leave-remove": {
+      const l = data.leaves.find((x) => x.id === t.dataset.id);
+      if (!l || !confirm("Remove this medical leave record and its documents? The call-in that triggered it stays.")) break;
+      deleteFiles([...(l.attachments ?? []), ...(overlay?.leave?.attachments ?? [])].map((a) => a.file));
+      data.leaves = data.leaves.filter((x) => x.id !== l.id);
+      overlay.added = [];
+      closeOverlay(); save();
+      break;
+    }
     case "update-now": location.reload(); break;
     case "update-dismiss": document.getElementById("update-notice")?.remove(); break;
     case "page": ui.page = t.dataset.page; ui.expanded = null; closeOverlay(); render(); break;
@@ -1470,6 +1620,10 @@ document.addEventListener("click", (ev) => {
       const id = t.dataset.id;
       const gone = (t.dataset.kind === "entry" ? data.entries : data.reprimands).find((x) => x.id === id);
       deleteFiles((gone?.attachments ?? []).map((a) => a.file));
+      if (t.dataset.kind === "entry") {
+        for (const l of data.leaves.filter((x) => x.triggerEntryId === id)) deleteFiles((l.attachments ?? []).map((a) => a.file));
+        data.leaves = data.leaves.filter((x) => x.triggerEntryId !== id);
+      }
       if (t.dataset.kind === "entry") {
         data.entries = data.entries.filter((e) => e.id !== id);
         for (const r of data.reprimands) r.pointEntryIDs = (r.pointEntryIDs ?? []).filter((x) => x !== id);
@@ -1577,6 +1731,18 @@ document.addEventListener("change", (ev) => {
     renderReprimandEditor();
     return;
   }
+  if (overlay?.kind === "leave" && (el.dataset.leave || el.dataset.leaveTime)) {
+    const l = overlay.leave;
+    if (el.dataset.leaveTime) {
+      const t = parseTime(el.value);
+      el.classList.toggle("invalid", t === null);
+      if (t === null) return;
+      el.value = fmtTime(t);
+      if (t) l[el.dataset.leaveTime] = t; else delete l[el.dataset.leaveTime];
+    } else l[el.dataset.leave] = el.value;
+    return;
+  }
+  if (el.id === "return-time") { const t = parseTime(el.value); el.classList.toggle("invalid", t === null); if (t) el.value = fmtTime(t); return; }
   if ((el.dataset.time || el.dataset.submit) && overlay?.kind === "entry") {
     const e = overlay.entry;
     if (el.classList.contains("time-text")) {
@@ -1616,6 +1782,7 @@ document.addEventListener("change", (ev) => {
 
 document.addEventListener("input", (ev) => {
   const el = ev.target, key = el.dataset.bind;
+  if (overlay?.kind === "leave" && el.dataset.leave === "note") { overlay.leave.note = el.value; return; }
   if (!overlay || !key || el.tagName === "SELECT" || el.type === "checkbox" || el.type === "date") return;
   if (overlay.kind === "entry") overlay.entry[key] = el.type === "number" ? Number(el.value) || 0 : el.value;
   else if (overlay.kind === "rep") overlay.rep[key] = el.value;
@@ -1642,7 +1809,7 @@ document.addEventListener("paste", (ev) => {
   const files = [...(ev.clipboardData?.items ?? [])].filter((i) => i.type.startsWith("image/")).map((i) => i.getAsFile()).filter(Boolean);
   if (!files.length) return;
   ev.preventDefault();
-  if (!tauri) { storeWebFiles(files, false).then(addAttachments); return; }
+  if (!tauri) { storeWebFiles(files, editing().pdf, !!editing().any).then(addAttachments); return; }
   Promise.all(files.map((f) => new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result).split(",")[1]);
