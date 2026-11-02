@@ -17,6 +17,7 @@
   - a notice to confirm in CastLife when a point drops off
   - a notice to confirm with leadership when reprimands expire
 - **Calendar:** a month view of every day you called out.
+- **Built-in file viewer:** attachments open right in the app, with no other program needed. It handles PDFs, Word documents (.docx), spreadsheets (Excel, CSV, OpenDocument), images (JPG, PNG, GIF, WebP, HEIC, SVG, TIFF and more), text and RTF files, and audio or video. Anything else can still be opened with another app.
 - **Your data stays on your computer.** It saves automatically, and you can export and import backups.
 - **Light and dark mode.** Every rule (thresholds, windows, occurrence limits) can be changed in Settings.
 
@@ -93,6 +94,12 @@ Pushing a tag such as `v1.2.0` runs the [release workflow](.github/workflows/rel
 
 - Built with [Tauri](https://tauri.app).
 - Icons by [Lucide](https://lucide.dev) (ISC license).
+- File viewer:
+  - [PDF.js](https://mozilla.github.io/pdf.js/) (Apache 2.0)
+  - [Mammoth](https://github.com/mwilliamson/mammoth.js) (BSD 2-Clause)
+  - [SheetJS Community Edition](https://sheetjs.com) (Apache 2.0)
+  - [UTIF.js](https://github.com/photopea/UTIF.js) (MIT) and [pako](https://github.com/nodeca/pako) (MIT)
+  - [heic2any](https://github.com/alexcorvi/heic2any) (MIT)
 - Fonts are [Plus Jakarta Sans](https://fonts.google.com/specimen/Plus+Jakarta+Sans), [Outfit](https://fonts.google.com/specimen/Outfit) and [Cabin](https://fonts.google.com/specimen/Cabin) (SIL Open Font License).
 
 ---

@@ -1,7 +1,7 @@
 {
   "name": "point-tracker",
   "private": true,
-  "version": "1.5.0",
+  "version": "1.6.0",
   "scripts": {
     "tauri": "tauri",
     "vendor": "node scripts/vendor.mjs",
@@ -18,7 +18,12 @@
     "@fontsource-variable/cabin": "^5.3.0",
     "@fontsource-variable/outfit": "^5.3.0",
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
-    "lucide": "^0.460.0"
+    "heic2any": "^0.0.4",
+    "lucide": "^0.460.0",
+    "mammoth": "^1.13.0",
+    "pdfjs-dist": "^4.10.38",
+    "utif": "^3.1.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "type": "module",
   "description": "Attendance points and reprimand tracker.",

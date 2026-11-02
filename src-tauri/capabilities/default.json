@@ -29,6 +29,12 @@
         },
         {
           "url": "https://castlife.disney.com/*"
+        },
+        {
+          "url": "https://disney.service-now.com/DToolsHR"
+        },
+        {
+          "url": "https://disney.service-now.com/*"
         }
       ]
     }

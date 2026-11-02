@@ -1,5 +1,6 @@
 import * as E from "./engine.js";
 import * as WS from "./webstore.js";
+import * as V from "./viewer.js";
 
 const { Day } = E;
 const STORE = { data: "pt-demo-data", appearance: "pt-appearance", layout: "pt-layout" };
@@ -43,7 +44,7 @@ async function load() {
     WS.requestPersistence();
   }
   if (raw) data = JSON.parse(raw);
-  else if (env.demo) data = await (await fetch("sample-data.json")).json();
+  else if (env.demo) data = await loadSample();
   else data = { entries: [], reprimands: [] };
   data.settings ??= E.defaultSettings();
   data.settings = { ...E.defaultSettings(), ...data.settings };
@@ -54,7 +55,25 @@ async function load() {
   data.confirmations.expirations ??= [];
   data.confirmations.leaveDismissed ??= [];
   data.leaves ??= [];
+  normalizeLeaves();
 }
+/** Sample data for the demo, unpacking any bundled documents into attachment storage. */
+async function loadSample() {
+  const sample = await (await fetch("sample-data.json")).json();
+  for (const [file, b64] of Object.entries(sample.attachmentFiles ?? {})) {
+    try {
+      if (tauri) await tauri.core.invoke("restore_attachment", { file, dataBase64: b64 });
+      else {
+        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        await WS.putFile(file, new Blob([bytes], { type: MIME[extOf(file)] ?? "" }));
+      }
+    } catch {}
+    thumbCache.delete(file);
+  }
+  delete sample.attachmentFiles;
+  return sample;
+}
+
 function persist() {
   data.updatedAt = stamp();
   const json = JSON.stringify(data, null, 2);
@@ -68,9 +87,10 @@ function save() {
 
 // ---------- Attachments ----------
 
-const IMAGE_EXTS = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "heic"];
-const MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp", heic: "image/heic" };
+const IMAGE_EXTS = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "heic", "heif", "svg", "avif", "tif", "tiff"];
+const MIME = V.MIME;
 const thumbCache = new Map();
+const extOf = (name) => (name.split(".").pop() || "").toLowerCase();
 
 /** Thumbnails/links for a list of attachments. Images load after render (see hydrateThumbs). */
 function attachmentList(list, { removable = false } = {}) {
@@ -80,7 +100,7 @@ function attachmentList(list, { removable = false } = {}) {
       <button class="att-open" data-action="open-attachment" data-file="${esc(a.file)}">
         ${a.kind === "image" ? `<img data-thumb="${esc(a.file)}" alt="">`
           : a.kind === "pdf" ? `<span class="att-pdf">${icon("file-text")}<span>PDF</span></span>`
-          : `<span class="att-pdf att-file">${icon("file")}<span>${esc((a.name.split(".").pop() || "FILE").toUpperCase().slice(0, 5))}</span></span>`}
+          : `<span class="att-pdf att-file">${icon(V.fileIcon(a.name)[0])}<span>${esc((a.name.split(".").pop() || "FILE").toUpperCase().slice(0, 5))}</span></span>`}
         <span class="att-name">${esc(a.name)}</span>
       </button>
       ${removable ? `<button class="att-remove" data-action="remove-attachment" data-file="${esc(a.file)}" title="Remove">${icon("x")}</button>` : ""}
@@ -105,7 +125,13 @@ async function thumbSrc(file) {
 }
 
 async function hydrateThumbs(root = document) {
-  for (const img of root.querySelectorAll("img[data-thumb]")) img.src = await thumbSrc(img.dataset.thumb);
+  for (const img of root.querySelectorAll("img[data-thumb]")) {
+    // Formats this device can't draw (HEIC/TIFF outside Apple's WebKit) fall back to an icon.
+    img.onerror = () => img.replaceWith(Object.assign(document.createElement("span"), {
+      className: "att-pdf att-file", innerHTML: `${icon("image")}<span>${esc(extOf(img.dataset.thumb).toUpperCase())}</span>` }));
+    img.src = await thumbSrc(img.dataset.thumb);
+  }
+  lucide.createIcons();
 }
 
 function deleteFiles(files) {
@@ -116,37 +142,40 @@ function deleteFiles(files) {
   }
 }
 
-/** Opens an attachment: desktop uses the system viewer; web shows it in the app. */
-async function openAttachment(file) {
-  if (tauri) return tauri.core.invoke("open_attachment", { file });
-  const blob = await WS.getFile(file);
-  if (!blob) return alert("That file couldn't be found.");
-  const att = [...data.entries, ...data.reprimands, ...(data.leaves ?? [])].flatMap((x) => x.attachments ?? []).find((a) => a.file === file);
-  const url = URL.createObjectURL(blob);
-  const isPdf = blob.type === "application/pdf" || file.endsWith(".pdf");
-  if (att?.kind === "file") {
-    const f = new File([blob], att.name, { type: blob.type });
-    if (navigator.canShare?.({ files: [f] })) return navigator.share({ files: [f] }).catch(() => {});
-    return Object.assign(document.createElement("a"), { href: url, download: att.name }).click();
-  }
-  showViewer(`
-    <div class="viewer-head"><b class="head">${esc(att?.name ?? file)}</b><span class="spacer"></span>
-      ${navigator.canShare ? `<button class="btn-subtle small" data-action="share-attachment" data-file="${esc(file)}">${icon("share")} Share</button>` : ""}
-      <button class="btn-subtle small" data-action="close-viewer">${icon("x")} Close</button></div>
-    ${isPdf ? `<iframe class="viewer-body" src="${url}"></iframe>` : `<img class="viewer-body" src="${url}" alt="">`}`);
+const findAttachment = (file) => [...data.entries, ...data.reprimands, ...(data.leaves ?? [])].flatMap((x) => x.attachments ?? []).find((a) => a.file === file);
+
+/** Opens an attachment in the app's own viewer (PDFs, images, Word, spreadsheets, text, audio/video). */
+function openAttachment(file) {
+  const name = findAttachment(file)?.name ?? file;
+  return V.openViewer({
+    name,
+    load: async () => {
+      if (tauri) return new Blob([await tauri.core.invoke("read_attachment_bytes", { file })], { type: MIME[extOf(file)] ?? "" });
+      const blob = await WS.getFile(file);
+      if (!blob) throw new Error("That file couldn't be found.");
+      return blob;
+    },
+    // Desktop: hand the file to another app (to print it, for example). Web: share or save a copy.
+    openExternal: tauri ? () => tauri.core.invoke("open_attachment", { file }).catch((err) => alert(`Couldn't open it: ${err}`)) : null,
+    share: !tauri && navigator.canShare ? () => shareAttachment(file) : null,
+    download: tauri ? null : async () => {
+      const url = URL.createObjectURL(await WS.getFile(file));
+      Object.assign(document.createElement("a"), { href: url, download: name }).click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    },
+    swipe: (el, close) => enableSwipeClose(el, close, () => true, (e) => !!e.target.closest(".viewer-head")),
+  });
 }
 
 async function shareAttachment(file) {
   const blob = await WS.getFile(file);
-  const att = [...data.entries, ...data.reprimands, ...(data.leaves ?? [])].flatMap((x) => x.attachments ?? []).find((a) => a.file === file);
-  const f = new File([blob], att?.name ?? file, { type: blob.type });
+  const f = new File([blob], findAttachment(file)?.name ?? file, { type: blob.type });
   if (navigator.canShare?.({ files: [f] })) await navigator.share({ files: [f] }).catch(() => {});
 }
 
 /** The item being edited (entry or reprimand) and whether it takes PDFs. */
 const editing = () => overlay?.kind === "entry" ? { item: overlay.entry, pdf: false, rerender: renderEntryEditor }
-  : overlay?.kind === "rep" ? { item: overlay.rep, pdf: true, rerender: renderReprimandEditor }
-  : overlay?.kind === "leave" ? { item: overlay.leave, pdf: true, any: true, rerender: renderLeaveEditor } : null;
+  : overlay?.kind === "rep" ? { item: overlay.rep, pdf: true, rerender: renderReprimandEditor } : null;
 
 function addAttachments(list) {
   const ed = editing();
@@ -156,7 +185,6 @@ function addAttachments(list) {
   ed.rerender();
 }
 
-const extOf = (name) => (name.split(".").pop() || "").toLowerCase();
 const webName = (ext) => `${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 8)}.${ext}`;
 
 /** Stores browser File/Blob objects (web version). allowAny: any file type (leave documentation). */
@@ -316,6 +344,9 @@ async function importBackupWeb() {
     data.settings = { ...E.defaultSettings(), ...(data.settings ?? {}) };
     data.entries ??= []; data.reprimands ??= [];
     data.confirmations ??= { dropOffs: [], expirations: [] };
+    data.confirmations.leaveDismissed ??= [];
+    data.leaves ??= [];
+    normalizeLeaves();
     save();
     startAutosave();
   };
@@ -414,10 +445,26 @@ function render() {
   const ev = E.evaluate(data, asOf());
   document.body.classList.toggle("mobile", isMobile());
   if (isMobile()) return renderMobile(ev);
-  const body = ui.page === "calendar" ? calendarPage(ev) : ui.page === "settings" ? settingsPage() : overviewPage(ev);
+  const body = ui.page === "calendar" ? calendarPage(ev) : ui.page === "settings" ? settingsPage()
+    : ui.page === "leaves" ? leavesPage(ev) : overviewPage(ev);
   document.getElementById("app").innerHTML = `${hero()}<main class="page page-${ui.page}">${body}</main>${footer()}${ui.expanded ? expandedTable(ev) : ""}`;
   lucide.createIcons();
   updateRepExpand();
+  hydrateThumbs(document.getElementById("app"));
+  setupLeaveCarousel();
+}
+
+/** Keeps the Previous Leaves dots in step with scrolling. */
+function setupLeaveCarousel() {
+  const track = document.getElementById("lc-track");
+  if (!track) return;
+  // Arrows only when there's more than fits.
+  track.parentElement.classList.toggle("fits", track.scrollWidth <= track.clientWidth + 4);
+  track.addEventListener("scroll", () => {
+    const cards = [...track.children];
+    const i = cards.findIndex((c) => c.offsetLeft + c.offsetWidth / 2 >= track.scrollLeft);
+    document.querySelectorAll(".lc-dots span").forEach((s, j) => s.classList.toggle("on", j === Math.max(0, i)));
+  }, { passive: true });
 }
 
 function overviewPage(ev) {
@@ -468,7 +515,7 @@ function expandedTable(ev) {
 
 function hero() {
   const over = ui.asOverride !== null;
-  const nav = [["overview", "house", "Overview"], ["calendar", "calendar-days", "Calendar"], ["settings", "settings", "Settings"]];
+  const nav = [["overview", "house", "Overview"], ["calendar", "calendar-days", "Calendar"], ["leaves", "heart-pulse", "Medical Leaves"], ["settings", "settings", "Settings"]];
   return `
   <div class="hero" data-tauri-drag-region>
     <div class="hero-art" data-tauri-drag-region></div>
@@ -602,6 +649,21 @@ function reprimandExpire(ev) {
 
 // ---------- Medical leave ----------
 
+const LEAVE_TYPES = ["Personal Medical Leave", "FMLA", "Workers' Comp", "Short-Term Disability", "Other"];
+const LEAVE_STATUSES = ["Pending", "Approved", "Active", "Denied", "Closed"];
+const DOC_TYPES = ["Doctor's Note", "HR Form", "Test Result", "Care Plan", "Appointment", "Return to Work", "Other"];
+/** Category → [label, icon, color]. Sets each leave card's look. */
+const LEAVE_CATEGORIES = {
+  back: ["Back / Spine", "person-standing", "blue"],
+  flu: ["Flu / Virus", "thermometer", "teal"],
+  respiratory: ["Respiratory", "wind", "purple"],
+  joint: ["Bone / Joint", "bone", "amber"],
+  gi: ["Stomach / GI", "pill", "green"],
+  injury: ["Injury", "bandage", "orange"],
+  other: ["Other", "heart-pulse", "red"],
+};
+const DTOOLSHR_URL = "https://disney.service-now.com/DToolsHR";
+
 /** Call-ins that went past the occurrence limit (one per occurrence), up to the viewed date. */
 function leaveTriggers(ev) {
   const max = ev.settings.maxSickString;
@@ -610,66 +672,372 @@ function leaveTriggers(ev) {
     return x?.medicalLeave && x.stringPosition === max + 1 && Day.parse(e.date) <= ev.asOf;
   });
 }
-const leaveFor = (entryId) => data.leaves.find((l) => l.triggerEntryId === entryId);
+/** The leave a date falls in (its start through the day before the first shift back), if any. */
+const leaveCovering = (iso) => {
+  const d = Day.parse(iso);
+  return data.leaves.find((l) => Day.parse(l.startDate) <= d && (!l.returnDate || d < Day.parse(l.returnDate)));
+};
 const onLeaveNow = (l, asOfDay) => Day.parse(l.startDate) <= asOfDay && (!l.returnDate || Day.parse(l.returnDate) > asOfDay);
+const currentLeave = (asOfDay) => data.leaves.filter((l) => onLeaveNow(l, asOfDay))
+  .sort((a, b) => (a.startDate < b.startDate ? 1 : -1))[0] ?? null;
+/** Last day of a leave: the day before the first shift back (null while ongoing). */
+const leaveEnd = (l) => (l.returnDate ? Day.parse(l.returnDate) - 1 : null);
+const leaveDaysCount = (l, asOfDay) => Math.max(0, Math.min(leaveEnd(l) ?? asOfDay, asOfDay) - Day.parse(l.startDate) + 1);
+const touchLeave = (l) => { l.updatedAt = stamp(); };
 /** How long an unconfirmed trigger keeps asking (days). */
 const LEAVE_CONFIRM_DAYS = 60;
+
+/** First call-in of the sick occurrence that the given call-in belongs to. */
+function occurrenceStart(entryId) {
+  const evals = E.run(data.entries, data.settings).evals;
+  let first = null;
+  for (const e of E.sortEntries(data.entries)) {
+    if (e.type !== "callSick") continue;
+    if (evals.get(e.id)?.stringPosition === 1) first = e.date;
+    if (e.id === entryId) return first;
+  }
+  return null;
+}
+
+/** Fills in fields for leaves saved by earlier versions (and any missing defaults). */
+function normalizeLeaves() {
+  for (const l of data.leaves) {
+    if (!l.triggerDate) {
+      // Earlier versions stored the triggering call-in's date as the start.
+      l.triggerDate = l.startDate;
+      const first = l.triggerEntryId ? occurrenceStart(l.triggerEntryId) : null;
+      if (first) l.startDate = first;
+    }
+    l.leaveType ??= LEAVE_TYPES[0];
+    l.status ??= "Approved";
+    l.category ??= "other";
+    l.diagnosis ??= "";
+    l.provider ??= "";
+    l.caseNumber ??= "";
+    l.expectedReturn ??= "";
+    l.note ??= "";
+    l.reminders ??= [];
+    l.attachments ??= [];
+    for (const a of l.attachments) {
+      a.docType ??= "Other";
+      a.uploadedAt ??= (l.confirmedAt ?? stamp()).slice(0, 10);
+    }
+  }
+}
 
 function leaveBanners(ev) {
   const out = [];
   for (const t of leaveTriggers(ev)) {
-    if (leaveFor(t.id) || data.confirmations.leaveDismissed.includes(t.id) || ev.asOf - Day.parse(t.date) > LEAVE_CONFIRM_DAYS) continue;
+    if (leaveCovering(t.date) || data.leaves.some((l) => l.triggerEntryId === t.id)
+      || data.confirmations.leaveDismissed.includes(t.id) || ev.asOf - Day.parse(t.date) > LEAVE_CONFIRM_DAYS) continue;
     out.push(`<div class="banner c-red">${icon("hospital")}<span><b>Medical leave triggered:</b> call-in ${ev.settings.maxSickString + 1} of a sick occurrence on ${Day.long(Day.parse(t.date))}. Confirm once it's official.</span>
       <span class="spacer"></span><span class="banner-actions">
       <button class="btn-subtle" data-action="leave-dismiss" data-id="${t.id}" title="It didn't become a medical leave">Dismiss</button>
       <button class="btn-primary small" data-action="leave-confirm" data-id="${t.id}">${icon("check")} Confirm Medical Leave</button></span></div>`);
   }
   for (const l of data.leaves.filter((l) => onLeaveNow(l, ev.asOf))) {
-    const day = ev.asOf - Day.parse(l.startDate) + 1, docs = l.attachments?.length ?? 0;
+    const day = leaveDaysCount(l, ev.asOf), docs = l.attachments?.length ?? 0;
     out.push(`<div class="banner c-amber">${icon("hospital")}<span><b>On medical leave</b> since ${Day.long(Day.parse(l.startDate))} · day ${day}${docs ? ` · ${docs} document${docs === 1 ? "" : "s"}` : ""}</span>
       <span class="spacer"></span><span class="banner-actions">
-      <button class="btn-subtle" data-action="leave-edit" data-id="${l.id}">${icon("paperclip")} Documents</button>
+      <button class="btn-subtle" data-action="leave-edit" data-id="${l.id}">${icon("heart-pulse")} View Leave</button>
       <button class="btn-primary small" data-action="leave-return" data-id="${l.id}">${icon("briefcase")} Return to Work</button></span></div>`);
   }
   return out;
 }
 
-function openLeaveEditor(leave) {
-  overlay = { kind: "leave", leave: structuredClone(leave), added: [], removed: [], original: JSON.stringify(leave) };
-  renderLeaveEditor();
+// ----- Medical Leaves page -----
+
+function leavesPage(ev) {
+  const cur = currentLeave(ev.asOf);
+  const view = ui.leaveView;
+  const back = isMobile() ? `<button class="m-back" data-action="m-page" data-page="overview">${icon("chevron-left")} Overview</button>` : "";
+  if (view && view !== "history") {
+    const l = data.leaves.find((x) => x.id === view);
+    if (l) return back + leaveDetail(l, ev, l === cur);
+  }
+  if (cur && view !== "history") return back + leaveDetail(cur, ev, true);
+  return back + leavesOverview(ev, cur);
 }
 
-function renderLeaveEditor() {
-  const l = overlay.leave;
-  const trigger = data.entries.find((e) => e.id === l.triggerEntryId);
+function leavesOverview(ev, cur) {
+  const q = (ui.leaveSearch ?? "").trim().toLowerCase();
+  let past = data.leaves.filter((l) => l !== cur);
+  if (q) past = past.filter((l) => [l.diagnosis, l.leaveType, l.provider, l.caseNumber, l.note, l.status, LEAVE_CATEGORIES[l.category]?.[0]]
+    .some((v) => String(v ?? "").toLowerCase().includes(q)));
+  past.sort((a, b) => ((a.startDate < b.startDate) === (ui.leaveSort === "old") ? -1 : 1));
+  return `
+  <div class="panel leaves-overview">
+    <div class="ld-head">
+      <span class="ld-heart">${icon("heart-pulse")}</span>
+      <div class="ld-head-text"><h2 class="page-title">Medical Leaves</h2>
+        <div class="muted">Track your medical leaves. This is your personal copy. You must still file all requests, documentation, and communications through DToolsHR.</div></div>
+      <span class="spacer"></span>
+      ${cur ? `<button class="btn-subtle" data-action="leave-edit" data-id="${cur.id}">${icon("arrow-left")} Back to Current Leave</button>` : ""}
+      <button class="btn-primary" data-action="leave-new">${icon("plus")} Report a New Medical Leave</button>
+    </div>
+    ${cur ? "" : `
+    <div class="leave-empty">${icon("folder-plus")}
+      <div><b class="head">You do not have an active medical leave.</b>
+        <div class="muted">Use the button above to report a new medical leave and start tracking it here.</div></div></div>`}
+    <div class="ld-section-head">
+      <span class="pi blue">${icon("history")}</span>
+      <div><div class="panel-title">Previous Medical Leaves</div><div class="muted">Click a leave below to view full details, documentation, and notes.</div></div>
+      <span class="spacer"></span>
+      <label class="leave-search">${icon("search")}<input type="search" data-leave-search placeholder="Search past leaves…" value="${esc(ui.leaveSearch ?? "")}"></label>
+      <select data-leave-sort><option value="new" ${ui.leaveSort !== "old" ? "selected" : ""}>Newest First</option><option value="old" ${ui.leaveSort === "old" ? "selected" : ""}>Oldest First</option></select>
+    </div>
+    ${past.length ? `
+    <div class="leave-carousel">
+      <button class="lc-arrow prev" data-action="lc-scroll" data-dir="-1" aria-label="Previous">${icon("chevron-left")}</button>
+      <div class="lc-track" id="lc-track">${past.map((l) => leaveCard(l, ev)).join("")}</div>
+      <button class="lc-arrow next" data-action="lc-scroll" data-dir="1" aria-label="Next">${icon("chevron-right")}</button>
+    </div>
+    <div class="m-dots lc-dots">${past.map((_, i) => `<span class="${i === 0 ? "on" : ""}"></span>`).join("")}</div>`
+    : `<div class="m-empty">${q ? "No past leaves match your search." : "No previous medical leaves yet."}</div>`}
+  </div>`;
+}
+
+function leaveCard(l, ev) {
+  const [, ic, color] = LEAVE_CATEGORIES[l.category] ?? LEAVE_CATEGORIES.other;
+  const end = leaveEnd(l);
+  return `
+  <button class="leave-card c-${color}" data-action="leave-edit" data-id="${l.id}">
+    <span class="lc-bg">${icon(ic)}</span>
+    <span class="lc-icon">${icon(ic)}</span>
+    <b class="lc-title">${esc(l.diagnosis || l.leaveType)}</b>
+    <span class="lc-dates">${Day.short(Day.parse(l.startDate))} –<br>${end !== null ? Day.short(end) : "Ongoing"}</span>
+    <span class="lc-status st-${esc(l.status)}">${esc(l.status)}</span>
+    <span class="lc-days">${leaveDaysCount(l, ev.asOf)} days</span>
+  </button>`;
+}
+
+function leaveDetail(l, ev, isCurrent) {
+  const S = Day.parse(l.startDate), T = Day.parse(l.triggerDate || l.startDate);
+  const R = l.returnDate ? Day.parse(l.returnDate) : null, X = l.expectedReturn ? Day.parse(l.expectedReturn) : null;
+  const days = leaveDaysCount(l, ev.asOf);
+  const chip = isCurrent ? ["Active", "st-Active"] : [l.status, `st-${l.status}`];
+  const tile = (ic, color, label, value, sub, num = false) => `
+    <div class="ld-tile"><div class="ld-tile-in"><span class="ld-tile-icon c-${color}">${icon(ic)}</span>
+      <div class="ld-tile-text"><div class="cap">${label}</div><div class="ld-tile-value ${num ? "num" : ""}">${value}</div><div class="muted small">${sub}</div></div></div></div>`;
+  // Protected days stop at the end of the leave.
+  const protEnd = Math.min(ev.asOf, leaveEnd(l) ?? ev.asOf);
+  const protDays = Math.max(0, protEnd - T + 1);
+  const protectedTile = T > ev.asOf
+    ? tile("hourglass", "amber", "Days Until Trigger", T - ev.asOf, `Until ${Day.short(T)}`, true)
+    : tile("shield-check", "amber", "Points Protected", `${protDays} day${protDays === 1 ? "" : "s"}`, R ? `${Day.short(T)} – ${Day.short(leaveEnd(l))}` : `Since ${Day.short(T)}`, true);
+  const returnTile = R
+    ? tile("calendar-check", "teal", "Returned", Day.short(R), `${R - S} total days`)
+    : X ? tile("calendar-check", "teal", "Expected Return", Day.short(X), `${X - S} total days (est.)`)
+    : tile("calendar-check", "teal", "Expected Return", "Not set", "Add it in Edit Details");
+
+  // Timeline: start → trigger → return (or expected return).
+  const E2 = R ?? X ?? Math.max(ev.asOf, T) + 7;
+  const span = Math.max(1, E2 - S);
+  const pos = (d) => Math.max(0, Math.min(100, ((d - S) / span) * 100));
+  const now = Math.min(ev.asOf, E2);
+  const timeline = `
+    <div class="panel ld-timeline">
+      <div class="tl-track">
+        <div class="tl-dash"></div>
+        <div class="tl-fill blue" style="left:0;width:${pos(Math.min(now, T))}%"></div>
+        ${now > T ? `<div class="tl-fill amber" style="left:${pos(T)}%;width:${pos(now) - pos(T)}%"></div>` : ""}
+        <span class="tl-dot blue" style="left:0"></span>
+        <span class="tl-dot amber" style="left:${pos(T)}%"></span>
+        <span class="tl-dot end ${R ? "done" : ""}" style="left:100%"></span>
+        ${ev.asOf > S && ev.asOf < E2 ? `<span class="tl-now" style="left:${pos(ev.asOf)}%" title="${Day.short(ev.asOf)}"></span>` : ""}
+      </div>
+      <div class="tl-labels">
+        <div style="left:0"><b>${Day.short(S)}</b><span>Start of Leave</span></div>
+        <div style="left:${pos(T)}%" class="mid amber"><b>${Day.short(T)}</b><span>Points Protected<br>(Day ${T - S + 1})</span></div>
+        <div style="left:100%" class="end"><b>${R || X ? Day.short(E2) : "—"}</b><span>${R ? "Returned" : "Expected Return"}${R || X ? `<br>(Day ${E2 - S + 1})` : ""}</span></div>
+      </div>
+    </div>`;
+
+  const detailRow = (ic, label, value) => `<div class="ld-row">${icon(ic)}<span class="muted">${label}</span><span>${value}</span></div>`;
+  const kindIcon = (a) => V.fileIcon(a.name);
+  const docs = (l.attachments ?? []).map((a) => {
+    const [ic, color] = kindIcon(a);
+    return `<div class="doc-row">
+      <button class="doc-name" data-action="open-attachment" data-file="${esc(a.file)}"><span class="c-${color}">${icon(ic)}</span><span>${esc(a.name)}</span></button>
+      <span class="muted">${esc(a.docType ?? "Other")}</span>
+      <span class="muted">${a.uploadedAt ? Day.short(Day.parse(a.uploadedAt)) : "—"}</span>
+      <button class="btn-subtle square" data-action="doc-menu" data-leave="${l.id}" data-file="${esc(a.file)}" aria-label="Document actions">${icon("ellipsis")}</button>
+    </div>`;
+  }).join("");
+
+  const upcoming = [
+    ...(T >= ev.asOf ? [{ ic: "hourglass", color: "amber", label: "Points Protected (Trigger Date)", date: T }] : []),
+    ...(!R && X && X >= ev.asOf ? [{ ic: "calendar-check", color: "teal", label: "Expected Return to Work", date: X }] : []),
+    ...(l.reminders ?? []).filter((r) => Day.parse(r.date) >= ev.asOf)
+      .map((r) => ({ ic: "bell", color: "blue", label: r.label, date: Day.parse(r.date), id: r.id })),
+  ].sort((a, b) => a.date - b.date);
+  const until = (d) => (d === ev.asOf ? "Today" : `In ${d - ev.asOf} day${d - ev.asOf === 1 ? "" : "s"}`);
+
+  return `
+  <div class="leave-grid">
+    <div class="leave-main">
+      <div class="panel ld-head">
+        <span class="ld-heart">${icon("heart-pulse")}</span>
+        <div class="ld-head-text">
+          <div class="ld-title-row"><h2 class="page-title">${isCurrent ? "Current Medical Leave" : "Medical Leave"}</h2><span class="ld-chip ${chip[1]}">${esc(chip[0])}</span></div>
+          <div class="muted">${esc(l.leaveType)}${l.diagnosis ? ` • ${esc(l.diagnosis)}` : ""}</div>
+        </div>
+        <span class="spacer"></span>
+        ${isCurrent ? `<button class="btn-primary small" data-action="leave-return" data-id="${l.id}">${icon("briefcase")} Return to Work</button>` : ""}
+        <button class="btn-subtle" data-action="leave-history">${icon("history")} ${isCurrent ? "View Previous Leaves" : "All Leaves"}</button>
+      </div>
+      <div class="ld-stats">
+        ${tile("calendar", "blue", "Start Date", Day.short(S), "First day of leave")}
+        ${tile("shield", "amber", "Trigger Date", Day.short(T), "First day points are protected")}
+        ${tile("clock", "blue", "Days on Leave", days, R ? "Total" : `As of ${Day.short(ev.asOf)}`, true)}
+        ${protectedTile}
+        ${returnTile}
+      </div>
+      ${timeline}
+      <div class="ld-bottom">
+        <div class="panel ld-panel">
+          <div class="ld-panel-head"><span class="pi blue">${icon("file-text")}</span><span class="panel-title">Leave Details</span><span class="spacer"></span>
+            <button class="btn-subtle small" data-action="leave-details" data-id="${l.id}">${icon("pencil")} Edit Details</button></div>
+          ${detailRow("hospital", "Leave Type", esc(l.leaveType))}
+          ${detailRow("stethoscope", "Reason / Diagnosis", esc(l.diagnosis) || "—")}
+          ${detailRow("heart-pulse", "Category", esc(LEAVE_CATEGORIES[l.category]?.[0] ?? "Other"))}
+          ${detailRow("hospital", "Care Provider", esc(l.provider) || "—")}
+          ${detailRow("hash", "Claim / Case Number", esc(l.caseNumber) || "—")}
+          ${detailRow("calendar-check", R ? "Returned" : "Expected Return", R ? `${Day.short(R)}${l.returnShiftStart ? ` at ${fmtTime(l.returnShiftStart)}` : ""}` : X ? Day.short(X) : "—")}
+          ${detailRow("circle-check", "Status", `<span class="status-dot st-${esc(l.status)}"></span>${esc(l.status)}`)}
+          ${detailRow("clock", "Last Updated", l.updatedAt ? fmtDateTime(isoLocal(l.updatedAt)) : "—")}
+        </div>
+        <div class="panel ld-panel">
+          <div class="ld-panel-head"><span class="pi blue">${icon("notepad-text")}</span><span class="panel-title">Notes</span><span class="spacer"></span>
+            <button class="btn-subtle small" data-action="leave-notes" data-id="${l.id}">${icon("pencil")} Edit Notes</button></div>
+          <div class="ld-notes ${l.note ? "" : "muted"}">${l.note ? esc(l.note) : "No notes yet."}</div>
+        </div>
+      </div>
+    </div>
+    <div class="leave-side">
+      <div class="panel ld-panel">
+        <div class="ld-panel-head"><span class="pi blue">${icon("file-text")}</span><span class="panel-title">Documents</span><span class="spacer"></span>
+          <button class="btn-primary small" data-action="doc-upload" data-id="${l.id}">${icon("plus")} Upload Document</button></div>
+        ${docs ? `<div class="doc-row doc-head muted"><span>File Name</span><span>Type</span><span>Uploaded</span><span>Actions</span></div>${docs}`
+          : `<div class="m-empty small">No documents yet. Upload doctor's notes, HR forms, test results — any file type.</div>`}
+      </div>
+      <div class="panel ld-panel">
+        <div class="ld-panel-head"><span class="pi blue">${icon("calendar-clock")}</span><span class="panel-title">Upcoming Dates</span><span class="spacer"></span>
+          <button class="btn-primary small" data-action="reminder-add" data-id="${l.id}">${icon("plus")} Add Reminder</button></div>
+        ${upcoming.length ? upcoming.map((u) => `<div class="up-row"><span class="c-${u.color}">${icon(u.ic)}</span><span>${esc(u.label)}</span>
+            <span>${Day.short(u.date)}</span><span class="muted">${until(u.date)}</span>
+            ${u.id ? `<button class="btn-subtle square" data-action="reminder-edit" data-leave="${l.id}" data-id="${u.id}" aria-label="Edit reminder">${icon("ellipsis")}</button>` : `<span></span>`}</div>`).join("")
+          : `<div class="m-empty small">Nothing coming up. Add reminders for appointments and deadlines.</div>`}
+      </div>
+      <div class="panel ld-important">
+        <div class="ld-panel-head"><span class="amber-text">${icon("circle-alert")}</span><b class="head amber-text">Important Reminder</b><span class="spacer"></span>
+          <a class="btn-amber" href="${DTOOLSHR_URL}" data-external>${icon("external-link")} Open DToolsHR</a></div>
+        <div>This tool does not file, submit, or communicate with DToolsHR. You must submit all medical leave requests, documentation, and updates through DToolsHR. This is only a personal tracking tool to help you manage your leave information.</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/** Local "YYYY-MM-DDTHH:MM" for an ISO timestamp (for display). */
+function isoLocal(iso) {
+  const d = new Date(iso), pad = (n) => String(n).padStart(2, "0");
+  return isNaN(d) ? "" : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function goToLeave(id) {
+  ui.leaveView = id;
+  if (isMobile()) ui.mpage = "leaves"; else ui.page = "leaves";
+  closeOverlay();
+  render();
+  document.getElementById("m-page")?.scrollTo(0, 0);
+}
+
+// ----- Leave editors -----
+
+function newLeaveDraft() {
+  const d = Day.iso(asOf());
+  return { id: uuid(), startDate: d, triggerDate: d, expectedReturn: "", leaveType: LEAVE_TYPES[0], status: "Pending", category: "other",
+    diagnosis: "", provider: "", caseNumber: "", note: "", reminders: [], attachments: [], confirmedAt: stamp() };
+}
+
+function openLeaveDetails(leave, isNew = false) {
+  overlay = { kind: "leaveDetails", draft: structuredClone(leave), isNew };
+  const l = overlay.draft;
+  const opts = (list, cur) => list.map((v) => `<option ${v === cur ? "selected" : ""}>${esc(v)}</option>`).join("");
   showDialog(`
     <div class="form">
-      <h2>Medical Leave</h2>
+      <h2>${isNew ? "Report a New Medical Leave" : "Edit Leave Details"}</h2>
       <div class="group">
-        <div class="field"><span>Leave started</span><input type="date" data-leave="startDate" value="${esc(l.startDate)}"></div>
-        ${trigger ? `<div class="field"><span>Triggered by</span><span>Sick call-in on ${Day.short(Day.parse(trigger.date))}</span></div>` : ""}
-        <div class="field"><span>Confirmed official</span><span>${l.confirmedAt ? fmtDateTime(l.confirmedAt.slice(0, 10)) : "—"}</span></div>
-        <div class="field"><span>First shift back</span><span>
-          <input type="date" data-leave="returnDate" value="${esc(l.returnDate ?? "")}">
-          <input type="text" class="time-text" data-leave-time="returnShiftStart" value="${esc(fmtTime(l.returnShiftStart))}" placeholder="7:00 AM"></span></div>
-        <div class="note" style="padding-top:0">Leave "First shift back" empty while you're still on leave.</div>
+        <div class="field"><span>Leave Type</span><select data-ld="leaveType">${opts(LEAVE_TYPES, l.leaveType)}</select></div>
+        <div class="field"><span>Status</span><select data-ld="status">${opts(LEAVE_STATUSES, l.status)}</select></div>
+        <div class="field"><span>Category</span><select data-ld="category">${Object.entries(LEAVE_CATEGORIES).map(([k, [label]]) => `<option value="${k}" ${k === l.category ? "selected" : ""}>${label}</option>`).join("")}</select></div>
+        <div class="field"><span>Reason / Diagnosis</span><input data-ld="diagnosis" value="${esc(l.diagnosis)}" placeholder="e.g. Back injury (sciatica)"></div>
+        <div class="field"><span>Care Provider</span><input data-ld="provider" value="${esc(l.provider)}" placeholder="e.g. Orlando Health – Dr. Michaels"></div>
+        <div class="field"><span>Claim / Case Number</span><input data-ld="caseNumber" value="${esc(l.caseNumber)}"></div>
       </div>
-      <div class="group"><h3>Documentation (optional)</h3>
-        <div class="field" style="flex-direction:column;align-items:stretch;gap:8px">
-          <span style="display:flex;align-items:center">Any files about the leave: PDFs, images, documents<span class="spacer"></span>
-            <button class="btn-subtle small" data-action="add-attachment">${icon("paperclip")} Add Files…</button></span>
-          ${attachmentList(l.attachments, { removable: true })}
-          ${isMobile() ? "" : `<span class="note" style="padding:0">You can also paste an image (⌘V / Ctrl+V)${tauri ? " or drag files here" : ""}.</span>`}
-        </div>
-        <div class="field" style="flex-direction:column;align-items:stretch"><span>Note</span><textarea rows="3" data-leave="note">${esc(l.note ?? "")}</textarea></div>
+      <div class="group"><h3>Dates</h3>
+        <div class="field"><span>Start Date<br><small class="muted">First call-in of the leave</small></span><input type="date" data-ld="startDate" value="${esc(l.startDate)}"></div>
+        <div class="field"><span>Trigger Date<br><small class="muted">First day points are protected</small></span><input type="date" data-ld="triggerDate" value="${esc(l.triggerDate)}"></div>
+        <div class="field"><span>Expected Return</span><input type="date" data-ld="expectedReturn" value="${esc(l.expectedReturn ?? "")}"></div>
+        <div class="field"><span>First Shift Back<br><small class="muted">Leave empty while on leave</small></span><span>
+          <input type="date" data-ld="returnDate" value="${esc(l.returnDate ?? "")}">
+          <input type="text" class="time-text" data-ld-time="returnShiftStart" value="${esc(fmtTime(l.returnShiftStart))}" placeholder="7:00 AM"></span></div>
       </div>
     </div>
     <div class="dialog-actions">
-      <button class="btn-subtle btn-danger" data-action="leave-remove" data-id="${l.id}">Remove Leave Record…</button>
+      ${isNew ? "" : `<button class="btn-subtle btn-danger" data-action="leave-delete" data-id="${l.id}">Delete Leave…</button>`}
       <span class="spacer"></span>
       <button class="btn-subtle" data-action="close">Cancel</button>
-      <button class="btn-primary" data-action="save-leave">Save</button>
+      <button class="btn-primary" data-action="ld-save">${isNew ? "Add Leave" : "Save"}</button>
     </div>`, true);
+}
+
+function openLeaveNotes(leave) {
+  overlay = { kind: "leaveNotes", leaveId: leave.id };
+  showDialog(`
+    <div class="form"><h2>Notes</h2>
+      <textarea id="leave-notes" rows="10" placeholder="Appointments, conversations with HR, how you're feeling…">${esc(leave.note ?? "")}</textarea></div>
+    <div class="dialog-actions"><span class="spacer"></span>
+      <button class="btn-subtle" data-action="close">Cancel</button>
+      <button class="btn-primary" data-action="notes-save" data-id="${leave.id}">Save</button></div>`, true);
+}
+
+function openReminder(leave, rem = null) {
+  overlay = { kind: "reminder", leaveId: leave.id, remId: rem?.id ?? null };
+  showDialog(`
+    <div class="form"><h2>${rem ? "Edit Reminder" : "Add Reminder"}</h2>
+      <div class="group">
+        <div class="field"><span>What</span><input id="rem-label" value="${esc(rem?.label ?? "")}" placeholder="e.g. Follow-up Appointment"></div>
+        <div class="field"><span>Date</span><input type="date" id="rem-date" value="${esc(rem?.date ?? Day.iso(asOf()))}"></div>
+      </div></div>
+    <div class="dialog-actions">
+      ${rem ? `<button class="btn-subtle btn-danger" data-action="reminder-delete">Delete</button>` : ""}
+      <span class="spacer"></span>
+      <button class="btn-subtle" data-action="close">Cancel</button>
+      <button class="btn-primary" data-action="reminder-save">Save</button></div>`);
+}
+
+/** Adds documents straight to a leave (any file type). */
+async function uploadLeaveDocs(leave) {
+  const today = Day.iso(Day.today());
+  const finish = (list) => {
+    if (!list.length) return;
+    leave.attachments.push(...list.map((a) => ({ ...a, docType: "Other", uploadedAt: today })));
+    touchLeave(leave);
+    save();
+  };
+  if (tauri) {
+    const picked = [await tauri.dialog.open({ multiple: true })].flat().filter(Boolean);
+    const added = [];
+    for (const path of picked) {
+      try { added.push(await tauri.core.invoke("import_attachment", { path, allowPdf: true, allowAny: true })); }
+      catch (err) { alert(err); }
+    }
+    return finish(added);
+  }
+  const input = Object.assign(document.createElement("input"), { type: "file", multiple: true });
+  input.onchange = async () => finish(await storeWebFiles([...input.files], true, true));
+  input.click();
 }
 
 function showReturnToWork(leave) {
@@ -944,7 +1312,7 @@ function defaultCardIndex(ev) {
 function renderMobile(ev) {
   const page = ui.mpage ?? "overview";
   const body = page === "callins" ? mCallins(ev) : page === "reprimands" ? mReprimands(ev)
-    : page === "calendar" ? mCalendar(ev) : page === "settings" ? mSettings() : mOverview(ev);
+    : page === "calendar" ? mCalendar(ev) : page === "settings" ? mSettings() : page === "leaves" ? leavesPage(ev) : mOverview(ev);
   const app = document.getElementById("app");
   const scroll = document.getElementById("m-page")?.scrollTop ?? 0;
   app.innerHTML = `${mHeader()}<main class="m-page m-${page}" id="m-page">${body}</main>${mTabbar()}`;
@@ -954,6 +1322,7 @@ function renderMobile(ev) {
   hydrateThumbs(app);
   if (page === "overview") setupCarousel();
   if (page === "settings") showVersionInSettings();
+  if (page === "leaves") setupLeaveCarousel();
 }
 
 function mHeader() {
@@ -990,7 +1359,22 @@ function mOverview(ev) {
     ${banners(ev)}
     ${reprimandCount(ev)}
     ${reprimandExpire(ev)}
+    ${mLeaveCard(ev)}
     <div class="m-disclaimer">${disclaimerHTML()}</div>`;
+}
+
+/** Overview card that opens the Medical Leaves page. */
+function mLeaveCard(ev) {
+  const cur = currentLeave(ev.asOf);
+  const past = data.leaves.filter((l) => l !== cur).length;
+  return `
+    <button class="panel m-leave-card ${cur ? "active" : ""}" data-action="leave-page">
+      <span class="ld-heart small">${icon("heart-pulse")}</span>
+      <span class="m-leave-text"><b class="head">Medical Leaves</b>
+        <span class="muted">${cur ? `On leave since ${Day.short(Day.parse(cur.startDate))} · day ${leaveDaysCount(cur, ev.asOf)}`
+          : `No active leave${past ? ` · ${past} previous` : ""}`}</span></span>
+      ${icon("chevron-right")}
+    </button>`;
 }
 
 /** Puts the chosen card in view and keeps the dots and chips in step with swiping. */
@@ -1154,11 +1538,11 @@ const editorDirty = () => {
  * Phone: drag a sheet down to close it. Only starts when the sheet is scrolled to the top,
  * so scrolling inside it still works. canClose() can veto (e.g. unsaved changes).
  */
-function enableSwipeClose(panel, close, canClose = () => true) {
+function enableSwipeClose(panel, close, canClose = () => true, canStart = () => panel.scrollTop <= 0) {
   if (!panel) return;
   let startY = null, startT = 0, dy = 0, dragging = false;
   panel.addEventListener("touchstart", (e) => {
-    startY = e.touches.length === 1 && panel.scrollTop <= 0 ? e.touches[0].clientY : null;
+    startY = e.touches.length === 1 && canStart(e) ? e.touches[0].clientY : null;
     startT = Date.now(); dy = 0; dragging = false;
   }, { passive: true });
   panel.addEventListener("touchmove", (e) => {
@@ -1187,15 +1571,6 @@ function enableSwipeClose(panel, close, canClose = () => true) {
   };
   panel.addEventListener("touchend", end);
   panel.addEventListener("touchcancel", end);
-}
-
-/** Full-screen viewer for an attachment (web version). */
-function showViewer(html) {
-  document.getElementById("viewer")?.remove();
-  const v = Object.assign(document.createElement("div"), { id: "viewer", className: "viewer", innerHTML: html });
-  document.body.append(v);
-  lucide.createIcons();
-  enableSwipeClose(v, () => v.remove());
 }
 
 // ---------- Overlays ----------
@@ -1536,7 +1911,7 @@ document.addEventListener("click", (ev) => {
       showPopover(`<input type="date" data-bind="asOf" value="${Day.iso(asOf())}" style="width:100%"><div style="margin-top:10px;display:flex;justify-content:flex-end"><button class="btn-subtle" data-action="today-close">Today</button></div>`, t, { side: "below", width: 240 });
       break;
     case "today-close": ui.asOverride = null; closeOverlay(); render(); break;
-    case "m-page": ui.mpage = t.dataset.page; closeOverlay(); render(); document.getElementById("m-page")?.scrollTo(0, 0); break;
+    case "m-page": if (t.dataset.page === "leaves") ui.leaveView = null; ui.mpage = t.dataset.page; closeOverlay(); render(); document.getElementById("m-page")?.scrollTo(0, 0); break;
     case "m-add": showAddSheet(); break;
     case "m-add-step": showAddSheet(t.dataset.step); break;
     case "m-new":
@@ -1553,12 +1928,104 @@ document.addEventListener("click", (ev) => {
     case "leave-confirm": {
       const trig = data.entries.find((e) => e.id === t.dataset.id);
       if (!trig) break;
-      data.leaves.push({ id: uuid(), triggerEntryId: trig.id, startDate: trig.date, confirmedAt: stamp(), attachments: [], note: "" });
-      save();
+      const l = { ...newLeaveDraft(), triggerEntryId: trig.id, startDate: occurrenceStart(trig.id) ?? trig.date, triggerDate: trig.date, status: "Approved" };
+      touchLeave(l);
+      data.leaves.push(l);
+      persist();
+      goToLeave(l.id);
       break;
     }
     case "leave-dismiss": data.confirmations.leaveDismissed.push(t.dataset.id); save(); break;
-    case "leave-edit": { const l = data.leaves.find((x) => x.id === t.dataset.id); closeOverlay(); if (l) openLeaveEditor(l); break; }
+    case "leave-edit": goToLeave(t.dataset.id); break;
+    case "leave-page": ui.leaveView = null; goToLeave(null); break;
+    case "leave-history": ui.leaveView = "history"; render(); break;
+    case "leave-new": openLeaveDetails(newLeaveDraft(), true); break;
+    case "leave-details": { const l = data.leaves.find((x) => x.id === t.dataset.id); if (l) openLeaveDetails(l); break; }
+    case "ld-save": {
+      const l = overlay.draft;
+      if (document.querySelector("#overlay .time-text.invalid")) { alert("The shift time couldn't be read. Try 7:00 AM, 7am or 15:30."); break; }
+      if (!l.startDate) { alert("Choose the start date."); break; }
+      if (!l.triggerDate) l.triggerDate = l.startDate;
+      if (!l.returnDate) { delete l.returnDate; delete l.returnShiftStart; }
+      touchLeave(l);
+      const i = data.leaves.findIndex((x) => x.id === l.id);
+      i >= 0 ? (data.leaves[i] = l) : data.leaves.push(l);
+      const isNew = overlay.isNew;
+      closeOverlay();
+      persist();
+      isNew ? goToLeave(l.id) : render();
+      break;
+    }
+    case "leave-delete": {
+      const l = data.leaves.find((x) => x.id === t.dataset.id);
+      if (!l || !confirm("Delete this medical leave record, its documents and reminders? The call-ins themselves stay.")) break;
+      deleteFiles((l.attachments ?? []).map((a) => a.file));
+      data.leaves = data.leaves.filter((x) => x.id !== l.id);
+      if (ui.leaveView === l.id) ui.leaveView = null;
+      closeOverlay(); save();
+      break;
+    }
+    case "leave-notes": { const l = data.leaves.find((x) => x.id === t.dataset.id); if (l) openLeaveNotes(l); break; }
+    case "notes-save": {
+      const l = data.leaves.find((x) => x.id === t.dataset.id);
+      if (l) { l.note = document.getElementById("leave-notes").value; touchLeave(l); }
+      closeOverlay(); save();
+      break;
+    }
+    case "doc-upload": { const l = data.leaves.find((x) => x.id === t.dataset.id); if (l) uploadLeaveDocs(l).catch((err) => alert(err)); break; }
+    case "doc-menu": {
+      const l = data.leaves.find((x) => x.id === t.dataset.leave), doc = l?.attachments.find((x) => x.file === t.dataset.file);
+      if (!doc) break;
+      const item = (on, label, attrs) => `<button ${attrs}><span class="check">${on ? "✓" : ""}</span>${label}</button>`;
+      const ref = `data-leave="${l.id}" data-file="${esc(doc.file)}"`;
+      showPopover(`
+        ${item(false, "Open", `data-action="open-attachment" data-file="${esc(doc.file)}"`)}
+        ${item(false, "Rename…", `data-action="doc-rename" ${ref}`)}
+        <hr><h4>Type</h4>
+        ${DOC_TYPES.map((ty) => item(doc.docType === ty, esc(ty), `data-action="doc-type" data-type="${esc(ty)}" ${ref}`)).join("")}
+        <hr>${item(false, `<span class="red">Delete…</span>`, `data-action="doc-delete" ${ref}`)}`, t, { side: "below", width: 220, menu: true });
+      break;
+    }
+    case "doc-type": case "doc-rename": case "doc-delete": {
+      const l = data.leaves.find((x) => x.id === t.dataset.leave), doc = l?.attachments.find((x) => x.file === t.dataset.file);
+      if (!doc) break;
+      closeOverlay();
+      if (a === "doc-type") doc.docType = t.dataset.type;
+      if (a === "doc-rename") { const n = prompt("Document name", doc.name); if (!n?.trim()) break; doc.name = n.trim(); }
+      if (a === "doc-delete") {
+        if (!confirm(`Delete "${doc.name}"?`)) break;
+        deleteFiles([doc.file]);
+        l.attachments = l.attachments.filter((x) => x !== doc);
+      }
+      touchLeave(l); save();
+      break;
+    }
+    case "reminder-add": { const l = data.leaves.find((x) => x.id === t.dataset.id); if (l) openReminder(l); break; }
+    case "reminder-edit": {
+      const l = data.leaves.find((x) => x.id === t.dataset.leave), r = l?.reminders.find((x) => x.id === t.dataset.id);
+      if (r) openReminder(l, r);
+      break;
+    }
+    case "reminder-save": {
+      const l = data.leaves.find((x) => x.id === overlay.leaveId);
+      const label = document.getElementById("rem-label").value.trim(), date = document.getElementById("rem-date").value;
+      if (!label || !date) { alert("Add what the reminder is for and its date."); break; }
+      const r = l.reminders.find((x) => x.id === overlay.remId);
+      if (r) Object.assign(r, { label, date }); else l.reminders.push({ id: uuid(), label, date });
+      touchLeave(l); closeOverlay(); save();
+      break;
+    }
+    case "reminder-delete": {
+      const l = data.leaves.find((x) => x.id === overlay.leaveId);
+      l.reminders = l.reminders.filter((x) => x.id !== overlay.remId);
+      touchLeave(l); closeOverlay(); save();
+      break;
+    }
+    case "lc-scroll": {
+      const track = document.getElementById("lc-track");
+      track?.scrollBy({ left: Number(t.dataset.dir) * (track.clientWidth * 0.8), behavior: "smooth" });
+      break;
+    }
     case "leave-return": { const l = data.leaves.find((x) => x.id === t.dataset.id); if (l) showReturnToWork(l); break; }
     case "leave-return-save": {
       const l = data.leaves.find((x) => x.id === t.dataset.id);
@@ -1574,29 +2041,9 @@ document.addEventListener("click", (ev) => {
       closeOverlay(); save();
       break;
     }
-    case "save-leave": {
-      const l = overlay.leave;
-      if (document.querySelector("#overlay .time-text.invalid")) { alert("The shift time couldn't be read. Try 7:00 AM, 7am or 15:30."); break; }
-      if (!l.startDate) { alert("Choose when the leave started."); break; }
-      deleteFiles(overlay.removed); overlay.added = [];
-      const i = data.leaves.findIndex((x) => x.id === l.id);
-      if (!l.returnDate) delete l.returnDate;
-      i >= 0 ? (data.leaves[i] = l) : data.leaves.push(l);
-      closeOverlay(); save();
-      break;
-    }
-    case "leave-remove": {
-      const l = data.leaves.find((x) => x.id === t.dataset.id);
-      if (!l || !confirm("Remove this medical leave record and its documents? The call-in that triggered it stays.")) break;
-      deleteFiles([...(l.attachments ?? []), ...(overlay?.leave?.attachments ?? [])].map((a) => a.file));
-      data.leaves = data.leaves.filter((x) => x.id !== l.id);
-      overlay.added = [];
-      closeOverlay(); save();
-      break;
-    }
     case "update-now": location.reload(); break;
     case "update-dismiss": document.getElementById("update-notice")?.remove(); break;
-    case "page": ui.page = t.dataset.page; ui.expanded = null; closeOverlay(); render(); break;
+    case "page": if (t.dataset.page === "leaves") ui.leaveView = null; ui.page = t.dataset.page; ui.expanded = null; closeOverlay(); render(); break;
     case "expand": ui.expanded = t.dataset.table; render(); break;
     case "collapse": ui.expanded = null; render(); break;
     case "cal-nav": ui.calMonth = Day.addMonths(ui.calMonth ?? monthStart(asOf()), Number(t.dataset.delta)); render(); break;
@@ -1684,8 +2131,6 @@ document.addEventListener("click", (ev) => {
     case "restore-rules": data.settings = E.defaultSettings(); save(); startAutosave(); break;
     case "add-attachment": pickAttachments().catch((err) => alert(err)); break;
     case "open-attachment": openAttachment(t.dataset.file).catch((err) => alert(`Couldn't open it: ${err}`)); break;
-    case "share-attachment": shareAttachment(t.dataset.file); break;
-    case "close-viewer": document.getElementById("viewer")?.remove(); break;
     case "remove-attachment": {
       const ed = editing();
       if (!ed) break;
@@ -1703,8 +2148,11 @@ document.addEventListener("click", (ev) => {
     case "export": closeOverlay(); exportBackup().catch((err) => alert(err)); break;
     case "import": closeOverlay(); importBackup().catch((err) => alert(`Couldn't import: ${err}`)); break;
     case "reset-sample":
-      fetch("sample-data.json").then((r) => r.json()).then((d) => {
+      loadSample().then((d) => {
         data = { ...d, settings: E.defaultSettings() };
+        data.confirmations ??= {}; data.confirmations.dropOffs ??= []; data.confirmations.expirations ??= [];
+        data.confirmations.leaveDismissed ??= []; data.leaves ??= [];
+        normalizeLeaves();
         save(); renderSettings();
       });
       break;
@@ -1759,17 +2207,18 @@ document.addEventListener("change", (ev) => {
     renderReprimandEditor();
     return;
   }
-  if (overlay?.kind === "leave" && (el.dataset.leave || el.dataset.leaveTime)) {
-    const l = overlay.leave;
-    if (el.dataset.leaveTime) {
+  if (overlay?.kind === "leaveDetails" && (el.dataset.ld || el.dataset.ldTime)) {
+    const l = overlay.draft;
+    if (el.dataset.ldTime) {
       const t = parseTime(el.value);
       el.classList.toggle("invalid", t === null);
       if (t === null) return;
       el.value = fmtTime(t);
-      if (t) l[el.dataset.leaveTime] = t; else delete l[el.dataset.leaveTime];
-    } else l[el.dataset.leave] = el.value;
+      if (t) l[el.dataset.ldTime] = t; else delete l[el.dataset.ldTime];
+    } else l[el.dataset.ld] = el.value;
     return;
   }
+  if (el.matches("[data-leave-sort]")) { ui.leaveSort = el.value; render(); return; }
   if (el.id === "return-time") { const t = parseTime(el.value); el.classList.toggle("invalid", t === null); if (t) el.value = fmtTime(t); return; }
   if ((el.dataset.time || el.dataset.submit) && overlay?.kind === "entry") {
     const e = overlay.entry;
@@ -1810,7 +2259,15 @@ document.addEventListener("change", (ev) => {
 
 document.addEventListener("input", (ev) => {
   const el = ev.target, key = el.dataset.bind;
-  if (overlay?.kind === "leave" && el.dataset.leave === "note") { overlay.leave.note = el.value; return; }
+  if (overlay?.kind === "leaveDetails" && el.dataset.ld) { overlay.draft[el.dataset.ld] = el.value; return; }
+  if (el.matches("[data-leave-search]")) {
+    ui.leaveSearch = el.value;
+    const pos = el.selectionStart;
+    render();
+    const again = document.querySelector("[data-leave-search]");
+    again?.focus(); again?.setSelectionRange(pos, pos);
+    return;
+  }
   if (!overlay || !key || el.tagName === "SELECT" || el.type === "checkbox" || el.type === "date") return;
   if (overlay.kind === "entry") overlay.entry[key] = el.type === "number" ? Number(el.value) || 0 : el.value;
   else if (overlay.kind === "rep") overlay.rep[key] = el.value;
@@ -1818,7 +2275,8 @@ document.addEventListener("input", (ev) => {
 
 document.addEventListener("keydown", (ev) => {
   if (ev.key === "Escape") {
-    // Close the top-most thing: a pop-up or dialog first, then the expanded table.
+    // Close the top-most thing: the file viewer, a pop-up or dialog, then the expanded table.
+    if (V.closeViewer()) return;
     if (document.getElementById("overlay").innerHTML) closeOverlay();
     else if (ui.expanded) { ui.expanded = null; render(); }
   }

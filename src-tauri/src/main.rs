@@ -110,7 +110,7 @@ fn attachment_path(app: &AppHandle, file: &str) -> Result<PathBuf, String> {
 
 fn kind_for(ext: &str) -> Option<&'static str> {
     match ext {
-        "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "heic" => Some("image"),
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "heic" | "heif" | "svg" | "avif" | "tif" | "tiff" => Some("image"),
         "pdf" => Some("pdf"),
         _ => None,
     }
@@ -137,7 +137,7 @@ fn import_attachment(app: AppHandle, path: String, allow_pdf: bool, allow_any: O
     let kind = match kind_for(&ext) {
         Some(k) => k,
         None if allow_any.unwrap_or(false) => "file",
-        None => return Err("Only images (PNG, JPG, GIF, WebP, BMP, HEIC) and PDFs can be attached.".into()),
+        None => return Err("Only images (PNG, JPG, GIF, WebP, BMP, HEIC, SVG, TIFF) and PDFs can be attached.".into()),
     };
     if kind == "pdf" && !allow_pdf && !allow_any.unwrap_or(false) {
         return Err("Only images can be attached here.".into());
@@ -158,12 +158,27 @@ fn save_attachment_bytes(app: AppHandle, name: String, data_base64: String) -> R
     Ok(Attachment { file, name, kind: "image".into() })
 }
 
+/// Writes a bundled file (base64) under a given name. Used to unpack the demo's sample documents.
+#[tauri::command]
+fn restore_attachment(app: AppHandle, file: String, data_base64: String) -> Result<(), String> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data_base64).map_err(|e| e.to_string())?;
+    fs::write(attachment_path(&app, &file)?, bytes).map_err(|e| e.to_string())
+}
+
 /// File contents as base64, for thumbnails.
 #[tauri::command]
 fn read_attachment(app: AppHandle, file: String) -> Result<String, String> {
     use base64::Engine;
     let bytes = fs::read(attachment_path(&app, &file)?).map_err(|e| e.to_string())?;
     Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+}
+
+/// Raw file contents, for the in-app viewer (no base64 round trip).
+#[tauri::command]
+fn read_attachment_bytes(app: AppHandle, file: String) -> Result<tauri::ipc::Response, String> {
+    let bytes = fs::read(attachment_path(&app, &file)?).map_err(|e| e.to_string())?;
+    Ok(tauri::ipc::Response::new(bytes))
 }
 
 /// Opens an attachment in the system's default viewer.
@@ -327,7 +342,7 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             load_data, save_data, write_text_file, read_text_file, app_info,
-            import_attachment, save_attachment_bytes, read_attachment, open_attachment, delete_attachment,
+            import_attachment, save_attachment_bytes, read_attachment, read_attachment_bytes, open_attachment, delete_attachment, restore_attachment,
             export_backup, import_backup
         ])
         .run(tauri::generate_context!())
