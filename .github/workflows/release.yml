@@ -1,9 +1,14 @@
 # Builds Point Tracker for every supported platform and attaches the installers to a draft GitHub release.
-# Trigger: push a tag like v1.2.0 (or run it manually from the Actions tab).
+# Trigger: push a tag like v1.2.0, or run it from the Actions tab. Run by hand, give an existing tag
+# (e.g. v1.8.0) to redo that release, or leave it empty for a test build.
 #
-# Also builds signed update packages and latest.json, which installed apps read (from the newest
-# published release) to update themselves. Signing needs two repository secrets:
-# TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD (see README, "Updates").
+# 1. One draft release is created first, so every platform uploads into the same one.
+# 2. Each platform builds, signs its update package and uploads its files.
+# 3. latest.json (what installed apps read to update themselves) is written once at the end, from all
+#    the signed packages, so no platform can be left out.
+#
+# Signing needs two repository secrets: TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+# (see README, "Updates").
 #
 # Supported: macOS Apple Silicon · Windows 64-bit and 32-bit · Linux 64-bit (x86_64 and ARM64).
 # Builds are unsigned for now; see README for first-launch steps.
@@ -13,12 +18,60 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release (e.g. v1.8.0). Leave empty for a test build."
+        required: false
 
 permissions:
   contents: write
 
+env:
+  # Build numbers use the maintainer's local time (YYMMDDHHmm).
+  TZ: America/New_York
+
 jobs:
+  draft:
+    name: Create draft release
+    runs-on: ubuntu-latest
+    outputs:
+      id: ${{ steps.create.outputs.id }}
+      tag: ${{ steps.create.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: create
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          build=$(node scripts/stamp.mjs)
+          if [ "${{ github.ref_type }}" = "tag" ]; then tag="${{ github.ref_name }}"
+          elif [ -n "${{ inputs.tag }}" ]; then tag="${{ inputs.tag }}"
+          else tag="v${version}-build.${build}"; fi
+          cat > notes.md <<EOF
+          **Point Tracker Beta ${version}** (build ${build})
+
+          Already have 1.8.0 or newer on your computer? It updates itself; you'll see a notice when this version is out.
+
+          Download the file for your computer:
+          - **Mac (Apple Silicon, M1 or newer):** \`.dmg\`
+          - **Windows 64-bit:** \`x64-setup.exe\` (or \`x64_en-US.msi\`)
+          - **Windows 32-bit:** \`x86-setup.exe\` (or \`x86_en-US.msi\`)
+          - **Linux x86_64:** \`amd64.AppImage\`, \`amd64.deb\` or \`x86_64.rpm\`
+          - **Linux ARM64:** \`aarch64.AppImage\`, \`arm64.deb\` or \`aarch64.rpm\`
+
+          These builds are not code-signed yet, so your computer will warn you the first time.
+          See the README for how to open it.
+
+          Not affiliated with or endorsed by The Walt Disney Company (TWDC).
+          EOF
+          gh release create "$tag" --draft --title "Point Tracker Beta ${version}" --notes-file notes.md --target "${{ github.sha }}"
+          id=$(gh api "repos/${{ github.repository }}/releases" --jq "map(select(.tag_name == \"$tag\" and .draft)) | first | .id")
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: draft
     strategy:
       fail-fast: false
       matrix:
@@ -26,7 +79,7 @@ jobs:
           - name: macOS (Apple Silicon)
             runner: macos-latest
             target: aarch64-apple-darwin
-            bundles: dmg
+            bundles: app,dmg # "app" makes the .app.tar.gz update package
           - name: Windows 64-bit
             runner: windows-latest
             target: x86_64-pc-windows-msvc
@@ -46,9 +99,6 @@ jobs:
 
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
-    env:
-      # Build numbers use the maintainer's local time (YYMMDDHHmm).
-      TZ: America/New_York
 
     steps:
       - uses: actions/checkout@v4
@@ -84,27 +134,16 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('v__VERSION__-build.{0}', env.PT_BUILD_NUMBER) }}
-          releaseName: Point Tracker Beta __VERSION__
-          releaseBody: |
-            **Point Tracker Beta __VERSION__** (build ${{ env.PT_BUILD_NUMBER }})
-
-            Already have 1.8.0 or newer on your computer? It updates itself; you'll see a notice when this version is out.
-
-            Download the file for your computer:
-            - **Mac (Apple Silicon, M1 or newer):** `.dmg`
-            - **Windows 64-bit:** `x64-setup.exe` (or `x64_en-US.msi`)
-            - **Windows 32-bit:** `x86-setup.exe` (or `x86_en-US.msi`)
-            - **Linux x86_64:** `amd64.AppImage`, `amd64.deb` or `x86_64.rpm`
-            - **Linux ARM64:** `aarch64.AppImage`, `arm64.deb` or `aarch64.rpm`
-
-            These builds are not code-signed yet, so your computer will warn you the first time.
-            See the README for how to open it.
-
-            Not affiliated with or endorsed by The Walt Disney Company (TWDC).
-          releaseDraft: true
-          # Not a pre-release: "latest release" (which the updater reads) skips those.
-          prerelease: false
-          includeUpdaterJson: true
-          updaterJsonPreferNsis: true
+          releaseId: ${{ needs.draft.outputs.id }}
+          includeUpdaterJson: false # written once, after every platform (next job)
           args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --config src-tauri/tauri.build.conf.json
+
+  latest-json:
+    name: Write latest.json
+    needs: [draft, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/latest-json.mjs "${{ needs.draft.outputs.tag }}"
