@@ -318,8 +318,19 @@ async function showAbout() {
 
 // ---------- What's New ----------
 
-const appVersion = async () => tauri ? (await tauri.core.invoke("app_info")).version
-  : (await fetch("version.json", { cache: "no-store" }).then((r) => r.json())).version;
+/** The version of the code that's running (on the web, not the newest one on the server). */
+const appVersion = async () => {
+  if (tauri) return (await tauri.core.invoke("app_info")).version;
+  const own = await import("./app-version.js").then((m) => m.default.version).catch(() => null);
+  return own ?? (await fetch("version.json", { cache: "no-store" }).then((r) => r.json())).version;
+};
+/** Web: true while a newer version than the running one is on the server (it's downloading, or ready to load). */
+async function updatePending(version) {
+  if (tauri) return false;
+  if (document.getElementById("update-notice")) return true;
+  const latest = await fetch("version.json", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+  return !!latest?.version && latest.version !== version;
+}
 const whatsNewKey = () => `pt-whatsnew-${env.demo ? "demo" : "main"}`;
 
 // ---------- Welcome and tour (first launch) ----------
@@ -403,23 +414,28 @@ function startAppTour() {
   T.startTour(tourSteps());
 }
 
-/** First launch of a new version: show what changed (once). Skipped on a brand-new install with nothing in it. */
+/**
+ * First launch of a new version: show what changed. Skipped on a brand-new install with nothing in it.
+ * Only shown once the running version is the one the notes are for (not while an update is still
+ * downloading), and only counts as read once it's closed, so an update in between doesn't swallow it.
+ */
 async function maybeShowWhatsNew() {
   const version = await appVersion().catch(() => null);
   if (!version) return;
   const seen = pref(whatsNewKey(), null);
   if (seen === version) return;
-  setPref(whatsNewKey(), version);
   const usedBefore = seen || env.demo || data.entries.length || data.reprimands.length || data.leaves.length;
+  if (!usedBefore) { setPref(whatsNewKey(), version); return; }
   const notes = W.notesSince(seen, version);
-  if (!usedBefore || !notes.length || overlay) return;
-  showWhatsNew(notes, version);
+  if (!notes.some((n) => n.version === version || n.version === "next")) return; // nothing written for this version
+  if (overlay || (await updatePending(version))) return; // try again after the update
+  showWhatsNew(notes, version, { markSeen: true });
 }
 
-async function showWhatsNew(notes, version) {
+async function showWhatsNew(notes, version, { markSeen = false } = {}) {
   version ??= await appVersion().catch(() => "");
-  notes ??= W.notesSince(null, version);
-  overlay = { kind: "whatsnew" };
+  notes ??= W.recentNotes(version); // opened by hand: the last few versions
+  overlay = { kind: "whatsnew", markSeen: markSeen ? version : null };
   const label = (v) => (v === "next" ? version : v);
   const many = notes.length > 1;
   showDialog(`
@@ -2007,6 +2023,7 @@ function enableSwipeClose(panel, close, canClose = () => true, canStart = () => 
 
 function closeOverlay() {
   stopScanner();
+  if (overlay?.kind === "whatsnew" && overlay.markSeen) setPref(whatsNewKey(), overlay.markSeen);
   // Files attached during an edit that was cancelled aren't referenced anywhere; remove them.
   if (overlay?.added?.length) deleteFiles(overlay.added);
   overlay = null;

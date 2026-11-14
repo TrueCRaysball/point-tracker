@@ -8,6 +8,13 @@
 
 export const NOTES = [
   {
+    version: "1.7.1",
+    also: [
+      "The What's New screen now waits until an update has finished installing, so you get to read it.",
+      "Missed what was new in 1.7.0? It's in Settings → Help → What's New any time.",
+    ],
+  },
+  {
     version: "1.7.0",
     features: [
       {
@@ -66,4 +73,9 @@ export function notesSince(seen, current) {
   const forThis = (n) => n.version === "next" || compareVersions(n.version, current) <= 0;
   if (!seen) return NOTES.filter(forThis).slice(0, 1);
   return NOTES.filter((n) => forThis(n) && (n.version === "next" || compareVersions(n.version, seen) > 0));
+}
+
+/** The newest few versions' notes (up to the running one), for opening What's New by hand. */
+export function recentNotes(current, count = 3) {
+  return NOTES.filter((n) => n.version === "next" || compareVersions(n.version, current) <= 0).slice(0, count);
 }

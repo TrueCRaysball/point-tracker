@@ -8,6 +8,7 @@ builds/
 src-tauri/tauri.build.conf.json
 src/sw.js
 src/version.json
+src/app-version.js
 
 # Local-only settings
 local.config.json

@@ -11,6 +11,9 @@ execSync("node scripts/vendor.mjs", { stdio: "inherit" });
 const version = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8")).version;
 const build = buildNumberNow();
 writeFileSync("src/version.json", JSON.stringify({ version, build }, null, 2));
+// The same, as a module the app imports: the version of the code that's actually running
+// (version.json is fetched fresh from the network, so it can be newer while an update downloads).
+writeFileSync("src/app-version.js", `export default ${JSON.stringify({ version, build })};\n`);
 
 const files = [];
 const walk = (dir) => {
