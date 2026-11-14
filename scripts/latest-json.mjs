@@ -44,8 +44,10 @@ for (const [plain, extra, ending] of wanted) {
   const signature = execFileSync("cat", [`${tmp}/${file}.sig`], { encoding: "utf8" }).trim();
   for (const key of [plain, ...extra].filter(Boolean)) platforms[key] = { signature, url: url(file) };
 }
-for (const key of ["darwin-aarch64", "windows-x86_64", "windows-i686", "linux-x86_64", "linux-aarch64"]) {
-  if (!platforms[key]) console.warn(`Warning: no signed update package for ${key}.`);
+const missing = ["darwin-aarch64", "windows-x86_64", "windows-i686", "linux-x86_64", "linux-aarch64"].filter((k) => !platforms[k]);
+if (missing.length) {
+  console.error(`No signed update package for: ${missing.join(", ")}. Not writing latest.json.`);
+  if (!dryRun) process.exit(1);
 }
 
 const json = `${JSON.stringify({ version: tag.slice(1), notes: `https://github.com/${REPO}/releases/tag/${tag}`, pub_date: new Date().toISOString(), platforms }, null, 2)}\n`;

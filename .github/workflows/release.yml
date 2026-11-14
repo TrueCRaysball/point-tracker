@@ -65,8 +65,10 @@ jobs:
 
           Not affiliated with or endorsed by The Walt Disney Company (TWDC).
           EOF
-          gh release create "$tag" --draft --title "Point Tracker Beta ${version}" --notes-file notes.md --target "${{ github.sha }}"
-          id=$(gh api "repos/${{ github.repository }}/releases" --jq "map(select(.tag_name == \"$tag\" and .draft)) | first | .id")
+          # The new draft's id comes straight from GitHub's reply (a lookup right after can miss it).
+          id=$(gh api -X POST "repos/${{ github.repository }}/releases" -f tag_name="$tag" -f target_commitish="${{ github.sha }}" \
+            -f name="Point Tracker Beta ${version}" -F body=@notes.md -F draft=true -F prerelease=false --jq .id)
+          if [ -z "$id" ]; then echo "::error::Couldn't create the draft release"; exit 1; fi
           echo "id=$id" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
