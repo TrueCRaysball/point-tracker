@@ -1,6 +1,7 @@
 // Copies the icon library, fonts and sample data into src/ (the folder Tauri serves).
 import { copyFileSync, cpSync, mkdirSync } from "node:fs";
 mkdirSync("src/vendor/viewer", { recursive: true });
+mkdirSync("src/vendor/sync", { recursive: true });
 copyFileSync("node_modules/lucide/dist/umd/lucide.min.js", "src/vendor/lucide.min.js");
 const fonts = { "plus-jakarta-sans": "jakarta", outfit: "outfit", cabin: "cabin" };
 for (const [pkg, name] of Object.entries(fonts)) {
@@ -16,5 +17,9 @@ copyFileSync("node_modules/xlsx/dist/xlsx.full.min.js", "src/vendor/viewer/xlsx.
 copyFileSync("node_modules/utif/UTIF.js", "src/vendor/viewer/UTIF.js");
 copyFileSync("node_modules/pako/dist/pako_inflate.min.js", "src/vendor/viewer/pako_inflate.min.js");
 copyFileSync("node_modules/heic2any/dist/heic2any.min.js", "src/vendor/viewer/heic2any.min.js");
+// Nearby Sync: PeerJS (direct device-to-device connection), QR code maker and QR code reader.
+copyFileSync("node_modules/peerjs/dist/peerjs.min.js", "src/vendor/sync/peerjs.min.js");
+copyFileSync("node_modules/qrcode-generator/dist/qrcode.js", "src/vendor/sync/qrcode.js");
+copyFileSync("node_modules/jsqr/dist/jsQR.js", "src/vendor/sync/jsQR.js");
 copyFileSync("sample/demo-data.json", "src/sample-data.json");
-console.log("Vendored lucide, fonts, file viewer and sample data.");
+console.log("Vendored lucide, fonts, file viewer, sync and sample data.");

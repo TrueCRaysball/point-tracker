@@ -1,6 +1,9 @@
 import * as E from "./engine.js";
 import * as WS from "./webstore.js";
 import * as V from "./viewer.js";
+import * as S from "./sync.js";
+import * as W from "./whatsnew.js";
+import * as T from "./tour.js";
 
 const { Day } = E;
 const STORE = { data: "pt-demo-data", appearance: "pt-appearance", layout: "pt-layout" };
@@ -55,7 +58,9 @@ async function load() {
   data.confirmations.expirations ??= [];
   data.confirmations.leaveDismissed ??= [];
   data.leaves ??= [];
+  data.deleted ??= {};
   normalizeLeaves();
+  takeSnapshot();
 }
 /** Sample data for the demo, unpacking any bundled documents into attachment storage. */
 async function loadSample() {
@@ -74,11 +79,44 @@ async function loadSample() {
   return sample;
 }
 
-function persist() {
+function persist({ fromSync = false } = {}) {
+  const changedHere = trackChanges();
   data.updatedAt = stamp();
   const json = JSON.stringify(data, null, 2);
   if (tauri) tauri.core.invoke("save_data", { json }).catch((err) => alert(`Couldn't save: ${err}`));
   else WS.setData(webKey(), json).catch((err) => alert(`Couldn't save: ${err}`));
+  if (changedHere && !fromSync) S.changed();
+}
+
+// ---------- Change tracking (for Nearby Sync) ----------
+// Every record gets a "mod" time when it changes, and deleted records are remembered in data.deleted,
+// so two devices can be merged without one wiping out the other.
+
+const SYNCED = ["entries", "reprimands", "leaves"];
+let snapshot = null; // record id → JSON as last saved
+let settingsSnapshot = "";
+const recordKey = ({ mod, ...rest }) => JSON.stringify(rest);
+function takeSnapshot() {
+  snapshot = new Map();
+  for (const c of SYNCED) for (const x of data[c]) snapshot.set(x.id, recordKey(x));
+  settingsSnapshot = JSON.stringify(data.settings);
+}
+/** Stamps records changed since the last save and remembers deletions. True if anything changed. */
+function trackChanges() {
+  if (!snapshot) { takeSnapshot(); return false; }
+  const now = stamp(), seen = new Set();
+  let changed = false;
+  data.deleted ??= {};
+  for (const c of SYNCED) {
+    for (const x of data[c]) {
+      seen.add(x.id);
+      if (snapshot.get(x.id) !== recordKey(x)) { x.mod = now; changed = true; }
+    }
+  }
+  for (const id of snapshot.keys()) if (!seen.has(id)) { data.deleted[id] = now; changed = true; }
+  if (settingsSnapshot !== JSON.stringify(data.settings)) { data.settingsMod = now; changed = true; }
+  takeSnapshot();
+  return changed;
 }
 function save() {
   persist();
@@ -273,8 +311,135 @@ async function showAbout() {
       <div>Version ${esc(info.version)} (Build ${esc(info.build)})</div>
       <div class="muted">${esc(info.copyright)}</div>
       <div class="muted small">Not affiliated with or endorsed by The Walt Disney Company (TWDC).</div>
-      <button class="btn-primary" data-action="close">OK</button>
+      <div class="about-actions"><button class="btn-subtle" data-action="whats-new">${icon("sparkles")} What's New</button>
+        <button class="btn-primary" data-action="close">OK</button></div>
     </div>`);
+}
+
+// ---------- What's New ----------
+
+const appVersion = async () => tauri ? (await tauri.core.invoke("app_info")).version
+  : (await fetch("version.json", { cache: "no-store" }).then((r) => r.json())).version;
+const whatsNewKey = () => `pt-whatsnew-${env.demo ? "demo" : "main"}`;
+
+// ---------- Welcome and tour (first launch) ----------
+
+const introKey = () => `pt-intro-${env.demo ? "demo" : "main"}`;
+
+/** Very first launch (nothing recorded yet): offer the tour, syncing from another device, or skipping. */
+async function maybeShowIntro() {
+  if (pref(introKey(), null)) return false;
+  setPref(introKey(), "shown");
+  const fresh = env.demo || !(data.entries.length || data.reprimands.length || data.leaves.length);
+  if (!fresh || pref(whatsNewKey(), null)) return false; // someone who's used the app before
+  const version = await appVersion().catch(() => null);
+  if (version) setPref(whatsNewKey(), version); // new users don't need "what's new"
+  showWelcome();
+  return true;
+}
+
+function showWelcome() {
+  overlay = { kind: "welcome" };
+  const here = tauri || !isMobile() ? "computer" : "phone";
+  showDialog(`
+    <div class="whatsnew welcome">
+      <div class="wn-hero">
+        <div class="wn-art"></div>
+        <img src="vendor/${env.demo ? "app-icon-demo" : "app-icon"}.png" alt="" draggable="false">
+        <div><div class="wn-kicker">${icon("hand")} Welcome</div><h2>${env.demo ? "Point Tracker Demo" : "Point Tracker"}</h2>
+          <div class="wn-sub">${env.demo ? "This demo is filled with sample data, so explore freely." : "Track your attendance points, reprimands and medical leave in one place."}</div></div>
+      </div>
+      <div class="wn-body">
+        <button class="wl-option c-blue" data-action="intro-tour"><span class="wn-icon">${icon("map")}</span>
+          <div><b>Take the Tour</b><p>A one-minute look at how everything works.</p></div>${icon("chevron-right")}</button>
+        <button class="wl-option c-teal" data-action="intro-sync"><span class="wn-icon">${icon("refresh-cw")}</span>
+          <div><b>Sync Data</b><p>Already use Point Tracker on another device? Bring your data to this ${here}.</p></div>${icon("chevron-right")}</button>
+      </div>
+    </div>
+    <div class="dialog-actions wl-actions"><button class="link-btn" data-action="intro-skip">Skip Introduction</button></div>`, true);
+}
+
+/** Tour stops for the desktop layout and the phone layout. */
+function tourSteps() {
+  const q = (sel) => () => document.querySelector(sel);
+  const panel = (title) => () => [...document.querySelectorAll(".panel")].find((p) => p.querySelector(".panel-title")?.textContent.includes(title));
+  const intro = { target: null, title: "A quick look around", text: "Here's what each part of Point Tracker does. Use the arrow keys or the buttons to move through the tour." };
+  const done = { target: null, title: "You're all set", text: `Start by logging your call-ins with ${isMobile() ? "the <b>+</b> button" : "<b>Add Entry</b>"}. You can take this tour again any time from <b>Settings → Help</b>.` };
+  if (isMobile()) {
+    const tab = (page) => q(`.m-tabbar [data-page="${page}"]`);
+    return [
+      intro,
+      { target: q("#m-cards"), title: "Your points windows", text: "Each card is a rolling window (like 30 or 90 days). The ring shows your points against the limit that earns a reprimand. Swipe to see the others." },
+      { target: q(".m-plus"), title: "Log a call-in", text: "Tap <b>+</b> to add a call-in, a shift you picked up or worked, or a reprimand. Points are worked out for you." },
+      { target: tab("callins"), title: "Call-ins", text: "Every call-in you've logged, with its points and which sick occurrence it belongs to." },
+      { target: tab("reprimands"), title: "Reprimands", text: "Reprimands you've signed, when each one expires, and how close you are to termination." },
+      { target: tab("calendar"), title: "Calendar", text: "A month view of your call-ins, reprimands and medical leave." },
+      { target: q(".m-date"), title: "Look ahead or back", text: "Pick any date to see where you'll stand then. Handy for checking when points drop off." },
+      { target: q('.m-iconbtn[data-page="settings"]'), title: "Settings", text: "Adjust thresholds and point values, back up your data, and turn on <b>Nearby Sync</b> to keep your phone and computer in step." },
+      done,
+    ];
+  }
+  const nav = (page) => q(`.nav [data-page="${page}"]`);
+  return [
+    intro,
+    { target: q(".panel.workpoints"), title: "Work Points Progress", text: "Each card is a rolling window (like 30 or 90 days). The ring shows your points against the limit that earns a reprimand, and when your oldest point drops off." },
+    { target: panel("Attendance Reprimands"), title: "Attendance Reprimands", text: "How many reprimands are in effect, and how many more before termination." },
+    { target: panel("Reprimands Expire"), title: "Reprimands Expire", text: "When your current reprimands expire, with a countdown." },
+    { target: q(".panel.log"), title: "Call-ins and reprimands", text: "Everything you've logged. Click a row for details, or double-click to edit it." },
+    { target: q('[data-action="add-entry"]'), title: "Add Entry", text: "Log a call-in, a shift you picked up or worked, or another change. Points are worked out for you." },
+    { target: q(".datenav"), title: "Look ahead or back", text: "Change the date to see where you'll stand on any day. Handy for checking when points drop off." },
+    { target: nav("calendar"), title: "Calendar", text: "A month view of your call-ins, reprimands and medical leave." },
+    { target: nav("leaves"), title: "Medical Leaves", text: "Keep each leave's details, timeline, notes, upcoming dates and documents together." },
+    { target: nav("settings"), title: "Settings", text: "Adjust thresholds and point values, back up your data, and turn on <b>Nearby Sync</b> to keep your phone and computer in step." },
+    done,
+  ];
+}
+
+function startAppTour() {
+  closeOverlay();
+  if (isMobile()) ui.mpage = "overview"; else ui.page = "overview";
+  ui.expanded = null;
+  render();
+  T.startTour(tourSteps());
+}
+
+/** First launch of a new version: show what changed (once). Skipped on a brand-new install with nothing in it. */
+async function maybeShowWhatsNew() {
+  const version = await appVersion().catch(() => null);
+  if (!version) return;
+  const seen = pref(whatsNewKey(), null);
+  if (seen === version) return;
+  setPref(whatsNewKey(), version);
+  const usedBefore = seen || env.demo || data.entries.length || data.reprimands.length || data.leaves.length;
+  const notes = W.notesSince(seen, version);
+  if (!usedBefore || !notes.length || overlay) return;
+  showWhatsNew(notes, version);
+}
+
+async function showWhatsNew(notes, version) {
+  version ??= await appVersion().catch(() => "");
+  notes ??= W.notesSince(null, version);
+  overlay = { kind: "whatsnew" };
+  const label = (v) => (v === "next" ? version : v);
+  const many = notes.length > 1;
+  showDialog(`
+    <div class="whatsnew">
+      <div class="wn-hero">
+        <div class="wn-art"></div>
+        <img src="vendor/${env.demo ? "app-icon-demo" : "app-icon"}.png" alt="" draggable="false">
+        <div><div class="wn-kicker">${icon("sparkles")} What's New</div><h2>Point Tracker ${esc(version)}</h2>
+          <div class="wn-sub">Here's what's new since you last opened the app.</div></div>
+      </div>
+      <div class="wn-body">
+        ${notes.map((n) => `
+          ${many ? `<h3 class="wn-ver">Version ${esc(label(n.version))}</h3>` : ""}
+          <div class="wn-cards">${(n.features ?? []).map((f) => `
+            <div class="wn-card c-${f.color ?? "blue"}"><span class="wn-icon">${icon(f.icon)}</span>
+              <div><b>${esc(f.title)}</b><p>${esc(f.text)}</p></div></div>`).join("")}</div>
+          ${n.also?.length ? `<div class="wn-also"><div class="wn-also-head">Also in this update</div><ul>${n.also.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></div>` : ""}`).join("")}
+      </div>
+    </div>
+    <div class="dialog-actions"><span class="spacer"></span><button class="btn-primary" data-action="close">Continue</button></div>`, true);
 }
 
 /** File → Save / ⌘S / Ctrl+S: save now and confirm in the footer. */
@@ -368,6 +533,257 @@ async function importBackup() {
   save();
   startAutosave();
 }
+// ---------- Nearby Sync ----------
+
+const syncPayload = () => ({
+  entries: data.entries, reprimands: data.reprimands, leaves: data.leaves, deleted: data.deleted ?? {},
+  settings: data.settings, settingsMod: data.settingsMod, confirmations: data.confirmations,
+});
+const safeFileName = (f) => typeof f === "string" && f.length > 0 && f.length < 200 && !/[\\/]|\.\./.test(f);
+const DEVICE_NAME = tauri ? (IS_MAC ? "Mac" : /Windows/i.test(navigator.userAgent) ? "Windows PC" : "Linux PC")
+  : /iPhone/i.test(navigator.userAgent) ? "iPhone" : /iPad/i.test(navigator.userAgent) ? "iPad"
+  : /Android/i.test(navigator.userAgent) ? "Android phone" : "Browser";
+
+/** Merges another device's data into this one. Returns how many records changed here. */
+async function applySync(remote) {
+  const before = new Map(SYNCED.flatMap((c) => data[c].map((x) => [x.id, JSON.stringify(x)])));
+  const beforeSettings = JSON.stringify(data.settings);
+  Object.assign(data, S.merge(syncPayload(), remote));
+  data.settings = { ...E.defaultSettings(), ...data.settings };
+  for (const k of ["dropOffs", "expirations", "leaveDismissed"]) data.confirmations[k] ??= [];
+  normalizeLeaves();
+  let changes = JSON.stringify(data.settings) === beforeSettings ? 0 : 1;
+  const after = new Set();
+  for (const c of SYNCED) for (const x of data[c]) { after.add(x.id); if (before.get(x.id) !== JSON.stringify(x)) changes++; }
+  for (const id of before.keys()) if (!after.has(id)) changes++;
+  takeSnapshot(); // merged records aren't local edits
+  if (changes) { persist({ fromSync: true }); render(); startAutosave(); }
+  return changes;
+}
+
+function initSync() {
+  S.init({
+    configKey: `pt-sync-${env.demo ? "demo" : "main"}`,
+    deviceName: DEVICE_NAME,
+    payload: syncPayload,
+    apply: applySync,
+    files: async () => [...new Set(referencedFiles(data))].filter(safeFileName),
+    hasFile: async (f) => safeFileName(f) && (tauri ? tauri.core.invoke("attachment_exists", { file: f }) : !!(await WS.getFile(f))),
+    readFile: async (f) => {
+      if (!safeFileName(f)) return null;
+      if (tauri) return new Uint8Array(await tauri.core.invoke("read_attachment_bytes", { file: f }));
+      const b = await WS.getFile(f);
+      return b ? new Uint8Array(await b.arrayBuffer()) : null;
+    },
+    writeFile: async (f, bytes) => {
+      if (!safeFileName(f)) return;
+      const blob = new Blob([bytes], { type: MIME[extOf(f)] ?? "" });
+      if (tauri) await tauri.core.invoke("restore_attachment", { file: f, dataBase64: await blobToBase64(blob) });
+      else await WS.putFile(f, blob);
+      thumbCache.delete(f);
+    },
+    onStatus: refreshSyncGroup,
+    onPaired: ({ name }) => {
+      const el = document.getElementById("sync-pair-status");
+      if (el) el.innerHTML = `${icon("loader-circle")} Connected to ${esc(name)}. Syncing…`, lucide.createIcons();
+    },
+    onSynced: (r) => {
+      refreshSyncGroup();
+      const el = document.getElementById("sync-pair-status");
+      if (el) { el.innerHTML = `${icon("circle-check")} Paired with ${esc(r.name)} and synced.`; el.className = "sync-ok"; lucide.createIcons(); }
+      if (r.changes || r.files || syncToastWanted) syncToast(r);
+    },
+  }).catch(() => {});
+}
+
+let syncToastWanted = false;
+function syncToast(r) {
+  syncToastWanted = false;
+  document.getElementById("sync-toast")?.remove();
+  const parts = [];
+  if (r.changes) parts.push(`${r.changes} update${r.changes === 1 ? "" : "s"}`);
+  if (r.files) parts.push(`${r.files} document${r.files === 1 ? "" : "s"}`);
+  const n = Object.assign(document.createElement("div"), { id: "sync-toast", className: "sync-toast" });
+  n.innerHTML = `${icon("refresh-cw")}<span>${parts.length ? `Synced with ${esc(r.name)} · ${parts.join(", ")}` : `Up to date with ${esc(r.name)}`}</span>`;
+  document.body.append(n);
+  lucide.createIcons();
+  setTimeout(() => n.classList.add("hide"), 3200);
+  setTimeout(() => n.remove(), 3700);
+}
+
+function ago(iso) {
+  if (!iso) return "Not synced yet";
+  const mins = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (mins < 1) return "Synced just now";
+  if (mins < 60) return `Synced ${mins} min ago`;
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return Day.iso(Day.today()) === d.toLocaleDateString("en-CA") ? `Synced today at ${time}` : `Synced ${d.toLocaleDateString([], { month: "short", day: "numeric" })} at ${time}`;
+}
+const otherKind = () => (tauri || !isMobile() ? "phone" : "computer");
+
+function syncGroup() {
+  const head = `<h3>Nearby Sync</h3>`;
+  if (!S.supported()) return `<div class="group" id="sync-group">${head}<div class="note">Nearby Sync isn't available on this system. Use Export and Import Backup to move your data instead.</div></div>`;
+  const c = S.config(), st = S.status();
+  if (!c?.devices?.length) {
+    return `<div class="group" id="sync-group">${head}
+      <div class="note sync-intro">Keep this ${tauri || !isMobile() ? "computer" : "phone"} and your ${otherKind()} in sync. They connect to each other directly, with no account and no cloud storage. Both need Point Tracker open to sync.</div>
+      <div class="field"><span class="sync-btns"><button class="btn-primary" data-action="sync-pair">${icon("qr-code")} Show Pairing Code…</button>
+        <button class="btn-subtle" data-action="sync-join">${icon(isMobile() ? "scan-line" : "keyboard")} ${isMobile() ? "Scan" : "Enter"} Pairing Code…</button></span></div>
+    </div>`;
+  }
+  const line = st.busy ? `<span class="muted">${icon("loader-circle")} ${esc(st.message || "Syncing…")}</span>`
+    : st.error ? `<span class="sync-err">${icon("circle-alert")} ${esc(st.error)}</span>`
+    : `<span class="muted">Syncs automatically whenever both devices are open.</span>`;
+  return `<div class="group" id="sync-group">${head}
+    ${c.devices.map((d) => `<div class="field sync-device"><span>${icon(/iPhone|Android|iPad/.test(d.name) ? "smartphone" : "monitor")} <b>${esc(d.name)}</b></span><span class="muted">${ago(d.lastSync)}</span></div>`).join("")}
+    <div class="sync-line" id="sync-line">${line}</div>
+    <div class="field"><span class="sync-btns"><button class="btn-primary" data-action="sync-now" ${st.busy ? "disabled" : ""}>${icon("refresh-cw")} Sync Now</button>
+      <button class="btn-subtle" data-action="sync-pair">Pair Another Device…</button>
+      <button class="btn-subtle btn-danger" data-action="sync-off">Turn Off…</button></span></div>
+  </div>`;
+}
+/** Redraws just the sync section (keeps focus and scroll elsewhere on the page). */
+function refreshSyncGroup() {
+  const el = document.getElementById("sync-group");
+  if (!el) return;
+  el.outerHTML = syncGroup();
+  lucide.createIcons();
+}
+
+let qrLib = null;
+async function qrSvg(text) {
+  qrLib ??= new Promise((resolve, reject) => {
+    const sc = Object.assign(document.createElement("script"), { src: "vendor/sync/qrcode.js" });
+    sc.onload = () => resolve(window.qrcode);
+    sc.onerror = reject;
+    document.head.append(sc);
+  });
+  const q = (await qrLib)(0, "M");
+  q.addData(text);
+  q.make();
+  return q.createSvgTag({ cellSize: 6, margin: 3, scalable: true });
+}
+
+async function showPairDialog() {
+  overlay = { kind: "sync-pair" };
+  showDialog(`<div class="form"><h2>Pair a Device</h2><div class="muted">${icon("loader-circle")} Getting ready…</div></div>`);
+  let pairing;
+  try { pairing = await S.startPairing(); } catch (err) {
+    if (overlay?.kind !== "sync-pair") return;
+    return showDialog(`<div class="form"><h2>Pair a Device</h2><div class="sync-err">${esc(err.message ?? err)}</div></div>
+      <div class="dialog-actions"><span class="spacer"></span><button class="btn-primary" data-action="close">OK</button></div>`);
+  }
+  if (overlay?.kind !== "sync-pair") return;
+  const other = otherKind();
+  showDialog(`<div class="form sync-pair">
+      <h2>Pair a Device</h2>
+      <div>On your ${other}, open Point Tracker, go to <b>Settings → Nearby Sync</b> and tap <b>${other === "phone" ? "Scan Pairing Code" : "Enter Pairing Code"}</b>.
+        ${other === "phone" ? "Point it at this code." : "Type in the code below."}</div>
+      <div class="sync-qr">${await qrSvg(pairing.qr)}</div>
+      <div class="sync-code" title="Pairing code">${esc(pairing.code)}</div>
+      <div class="muted" id="sync-pair-status">${icon("loader-circle")} Waiting for your ${other}…</div>
+      <div class="note" style="padding:0">Only share this code with your own devices. Anyone with it can sync your data.</div>
+    </div>
+    <div class="dialog-actions"><span class="spacer"></span><button class="btn-primary" data-action="close">Done</button></div>`);
+}
+
+let scanner = null; // { stream, raf }
+function stopScanner() {
+  if (!scanner) return;
+  cancelAnimationFrame(scanner.raf);
+  scanner.stream?.getTracks().forEach((tr) => tr.stop());
+  scanner = null;
+}
+async function startScanner() {
+  const video = document.getElementById("sync-video");
+  if (!video) return;
+  try {
+    if (!window.jsQR) await new Promise((resolve, reject) => {
+      const sc = Object.assign(document.createElement("script"), { src: "vendor/sync/jsQR.js" });
+      sc.onload = resolve; sc.onerror = reject; document.head.append(sc);
+    });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+    if (overlay?.kind !== "sync-join") { stream.getTracks().forEach((tr) => tr.stop()); return; }
+    scanner = { stream, raf: 0 };
+    video.srcObject = stream;
+    await video.play();
+    const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const tick = () => {
+      if (!scanner) return;
+      if (video.videoWidth) {
+        const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
+        canvas.width = Math.round(video.videoWidth * scale); canvas.height = Math.round(video.videoHeight * scale);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const found = window.jsQR(ctx.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height, { inversionAttempts: "dontInvert" });
+        if (found?.data && S.parseCode(found.data)) { stopScanner(); joinWithCode(found.data); return; }
+      }
+      scanner.raf = requestAnimationFrame(tick);
+    };
+    tick();
+  } catch {
+    const cam = document.querySelector(".sync-cam");
+    if (cam) cam.innerHTML = `<div class="muted">${icon("camera-off")} The camera isn't available. Type the code instead.</div>`, lucide.createIcons();
+  }
+}
+
+function showJoinDialog() {
+  overlay = { kind: "sync-join" };
+  const cam = isMobile() && !!navigator.mediaDevices?.getUserMedia;
+  const other = otherKind();
+  showDialog(`<div class="form">
+      <h2>${cam ? "Scan" : "Enter"} Pairing Code</h2>
+      <div>On your ${other}, open Point Tracker, go to <b>Settings → Nearby Sync</b> and choose <b>Show Pairing Code</b>.
+        ${cam ? "Point the camera at the code, or type it in below." : "Type in the code shown under the QR code."}</div>
+      ${cam ? `<div class="sync-cam"><video id="sync-video" playsinline muted></video></div>` : ""}
+      <input id="sync-code" class="sync-code-input" type="text" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false">
+      <div id="sync-join-status" class="muted"></div>
+      <button class="link-btn" data-action="sync-pair">Or show a pairing code on this ${tauri || !isMobile() ? "computer" : "phone"} instead</button>
+    </div>
+    <div class="dialog-actions"><span class="spacer"></span>
+      <button class="btn-subtle" data-action="close">Cancel</button>
+      <button class="btn-primary" data-action="sync-join-go">Pair</button>
+    </div>`);
+  document.getElementById("sync-code").addEventListener("keydown", (e) => { if (e.key === "Enter") joinWithCode(e.target.value); });
+  if (cam) startScanner();
+}
+
+async function joinWithCode(text) {
+  const status = document.getElementById("sync-join-status");
+  if (!S.parseCode(text)) {
+    if (status) { status.className = "sync-err"; status.textContent = "That code isn't right. Check it and try again."; }
+    return;
+  }
+  if (S.paired() && S.config().devices.length && S.parseCode(text).key !== S.config().key
+    && !(await ask("This device is already paired with another device. Pair with the new one instead?", { title: "Switch Pairing?", okLabel: "Switch" }))) return;
+  if (status) { status.className = "muted"; status.innerHTML = `${icon("loader-circle")} Connecting…`; lucide.createIcons(); }
+  document.querySelector('[data-action="sync-join-go"]')?.setAttribute("disabled", "");
+  try {
+    syncToastWanted = true;
+    const r = await S.join(text);
+    if (overlay?.kind !== "sync-join") return;
+    stopScanner();
+    showDialog(`<div class="form"><h2>Paired</h2>
+        <div class="sync-ok">${icon("circle-check")} Paired with ${esc(r.name)} and synced${r.changes ? ` (${r.changes} update${r.changes === 1 ? "" : "s"})` : ""}.</div>
+        <div class="muted">From now on, changes sync automatically whenever both devices have Point Tracker open.</div></div>
+      <div class="dialog-actions"><span class="spacer"></span><button class="btn-primary" data-action="close">Done</button></div>`);
+    refreshSyncGroup();
+  } catch (err) {
+    syncToastWanted = false;
+    document.querySelector('[data-action="sync-join-go"]')?.removeAttribute("disabled");
+    const st = document.getElementById("sync-join-status");
+    if (st) { st.className = "sync-err"; st.textContent = err.message ?? String(err); }
+    if (overlay?.kind === "sync-join" && !scanner && document.getElementById("sync-video")) startScanner();
+  }
+}
+
+/** Yes/no question: the system dialog on desktop (the web view's own confirm() isn't reliable there), confirm() on the web. */
+async function ask(message, { title = "Point Tracker", okLabel = "OK", danger = false } = {}) {
+  if (tauri?.dialog?.ask) return tauri.dialog.ask(message, { title, kind: danger ? "warning" : "info", okLabel, cancelLabel: "Cancel" });
+  return confirm(`${title}\n\n${message}`);
+}
+
 const asOf = () => ui.asOverride ?? Day.today();
 const uuid = () => crypto.randomUUID().toUpperCase();
 
@@ -1040,6 +1456,20 @@ async function uploadLeaveDocs(leave) {
   input.click();
 }
 
+/** Rename a leave document (in-app, since prompt() isn't available in every desktop web view). */
+function showRenameDoc(leave, doc) {
+  overlay = { kind: "rename-doc" };
+  showDialog(`<div class="form"><h2>Rename Document</h2>
+      <input type="text" id="doc-name" value="${esc(doc.name)}" autocomplete="off"></div>
+    <div class="dialog-actions"><span class="spacer"></span>
+      <button class="btn-subtle" data-action="close">Cancel</button>
+      <button class="btn-primary" data-action="doc-rename-save" data-leave="${leave.id}" data-file="${esc(doc.file)}">Rename</button></div>`);
+  const input = document.getElementById("doc-name");
+  input.focus();
+  input.setSelectionRange(0, doc.name.lastIndexOf(".") > 0 ? doc.name.lastIndexOf(".") : doc.name.length);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") document.querySelector('[data-action="doc-rename-save"]').click(); });
+}
+
 function showReturnToWork(leave) {
   overlay = { kind: "return", leaveId: leave.id };
   showDialog(`
@@ -1576,6 +2006,7 @@ function enableSwipeClose(panel, close, canClose = () => true, canStart = () => 
 // ---------- Overlays ----------
 
 function closeOverlay() {
+  stopScanner();
   // Files attached during an edit that was cancelled aren't referenced anywhere; remove them.
   if (overlay?.added?.length) deleteFiles(overlay.added);
   overlay = null;
@@ -1848,6 +2279,12 @@ function settingsPage(lead = "") {
         <div class="field"><span>Days to show the "double-check with leadership" notice after reprimands expire</span>${num("expiryWarningDays")}</div>
         <div class="note">Both notices can be dismissed early with their Confirm button.</div>
       </div>
+      ${syncGroup()}
+      <div class="group"><h3>Help</h3>
+        <div class="field"><span>New here, or need a refresher?</span><span class="sync-btns">
+          <button class="btn-subtle" data-action="start-tour">${icon("map")} Take the Tour</button>
+          <button class="btn-subtle" data-action="whats-new">${icon("sparkles")} What's New</button></span></div>
+      </div>
       <div class="group"><h3>Data</h3>
         <div class="field"><span>Backup</span><span><button class="btn-subtle" data-action="export">Export Backup…</button>
           <button class="btn-subtle" data-action="import">Import Backup…</button></span></div>
@@ -1904,6 +2341,21 @@ document.addEventListener("click", (ev) => {
   const s = data.settings;
   switch (a) {
     case "close": closeOverlay(); break;
+    case "sync-pair": showPairDialog(); break;
+    case "whats-new": showWhatsNew(); break;
+    case "start-tour": case "intro-tour": startAppTour(); break;
+    case "intro-skip": closeOverlay(); break;
+    case "intro-sync":
+      closeOverlay();
+      if (S.supported()) showJoinDialog(); else importBackup().catch((err) => alert(`Couldn't import: ${err}`));
+      break;
+    case "sync-join": showJoinDialog(); break;
+    case "sync-join-go": joinWithCode(document.getElementById("sync-code")?.value); break;
+    case "sync-now": syncToastWanted = true; S.syncNow().then((r) => { if (!r.synced) syncToastWanted = false; }); break;
+    case "sync-off":
+      ask("Your data stays on this device; it just stops syncing. You can pair again any time.", { title: "Turn Off Nearby Sync?", okLabel: "Turn Off", danger: true })
+        .then((ok) => { if (ok) { S.unpair(); refreshSyncGroup(); } });
+      break;
     case "tab": ui.tab = t.dataset.tab; render(); break;
     case "today": ui.asOverride = null; render(); break;
     case "day": ui.asOverride = asOf() + Number(t.dataset.delta); if (ui.asOverride === Day.today()) ui.asOverride = null; render(); break;
@@ -1958,11 +2410,14 @@ document.addEventListener("click", (ev) => {
     }
     case "leave-delete": {
       const l = data.leaves.find((x) => x.id === t.dataset.id);
-      if (!l || !confirm("Delete this medical leave record, its documents and reminders? The call-ins themselves stay.")) break;
-      deleteFiles((l.attachments ?? []).map((a) => a.file));
-      data.leaves = data.leaves.filter((x) => x.id !== l.id);
-      if (ui.leaveView === l.id) ui.leaveView = null;
-      closeOverlay(); save();
+      if (!l) break;
+      ask("This deletes the medical leave record, its documents and reminders. The call-ins themselves stay.", { title: "Delete Medical Leave?", okLabel: "Delete", danger: true }).then((ok) => {
+        if (!ok) return;
+        deleteFiles((l.attachments ?? []).map((a) => a.file));
+        data.leaves = data.leaves.filter((x) => x.id !== l.id);
+        if (ui.leaveView === l.id) ui.leaveView = null;
+        closeOverlay(); save();
+      });
       break;
     }
     case "leave-notes": { const l = data.leaves.find((x) => x.id === t.dataset.id); if (l) openLeaveNotes(l); break; }
@@ -1990,14 +2445,26 @@ document.addEventListener("click", (ev) => {
       const l = data.leaves.find((x) => x.id === t.dataset.leave), doc = l?.attachments.find((x) => x.file === t.dataset.file);
       if (!doc) break;
       closeOverlay();
-      if (a === "doc-type") doc.docType = t.dataset.type;
-      if (a === "doc-rename") { const n = prompt("Document name", doc.name); if (!n?.trim()) break; doc.name = n.trim(); }
+      if (a === "doc-rename") { showRenameDoc(l, doc); break; }
       if (a === "doc-delete") {
-        if (!confirm(`Delete "${doc.name}"?`)) break;
-        deleteFiles([doc.file]);
-        l.attachments = l.attachments.filter((x) => x !== doc);
+        ask(`"${doc.name}" will be removed from this leave.`, { title: "Delete Document?", okLabel: "Delete", danger: true }).then((ok) => {
+          if (!ok) return;
+          deleteFiles([doc.file]);
+          l.attachments = l.attachments.filter((x) => x !== doc);
+          touchLeave(l); save();
+        });
+        break;
       }
+      doc.docType = t.dataset.type;
       touchLeave(l); save();
+      break;
+    }
+    case "doc-rename-save": {
+      const l = data.leaves.find((x) => x.id === t.dataset.leave), doc = l?.attachments.find((x) => x.file === t.dataset.file);
+      const n = document.getElementById("doc-name")?.value.trim();
+      if (!doc || !n) break;
+      doc.name = n;
+      closeOverlay(); touchLeave(l); save();
       break;
     }
     case "reminder-add": { const l = data.leaves.find((x) => x.id === t.dataset.id); if (l) openReminder(l); break; }
@@ -2367,3 +2834,5 @@ applyAppearance();
 render();
 startAutosave();
 lastSide = sideBySide();
+initSync();
+maybeShowIntro().then((shown) => { if (!shown) maybeShowWhatsNew(); });

@@ -18,6 +18,7 @@
   - a notice to confirm with leadership when reprimands expire
 - **Calendar:** a month view of every day you called out.
 - **Built-in file viewer:** attachments open right in the app, with no other program needed. It handles PDFs, Word documents (.docx), spreadsheets (Excel, CSV, OpenDocument), images (JPG, PNG, GIF, WebP, HEIC, SVG, TIFF and more), text and RTF files, and audio or video. Anything else can still be opened with another app.
+- **Nearby Sync:** pair your computer and phone once with a QR code, and they keep each other up to date (call-ins, reprimands, medical leaves, documents and settings) with no account and no cloud storage. Both need Point Tracker open at the same time. Changes are merged, so nothing gets overwritten. Not available on Linux builds whose web view lacks WebRTC.
 - **Your data stays on your computer.** It saves automatically, and you can export and import backups.
 - **Light and dark mode.** Every rule (thresholds, windows, occurrence limits) can be changed in Settings.
 
@@ -64,6 +65,13 @@ Your data saves automatically to a single `data.json` file:
 
 To keep a backup or move your data to another computer, use **Settings → Data → Export Backup / Import Backup**.
 
+### How Nearby Sync works
+
+- **Pairing** shows a QR code (and a typed code) holding a secret key. The key stays on your paired devices.
+- **Finding each other:** devices use PeerJS's free public server only to find each other, then connect directly (WebRTC). When a direct connection isn't possible, PeerJS's relay server forwards the data.
+- **Encryption:** everything sent is encrypted with the pairing key (AES-GCM), so neither server can read or change your data, and nothing is stored on them.
+- **Merging:** each record carries the time it last changed, and deletions are remembered, so the newest change wins and nothing is wiped.
+
 ## Building from source
 
 Requirements:
@@ -100,6 +108,10 @@ Pushing a tag such as `v1.2.0` runs the [release workflow](.github/workflows/rel
   - [SheetJS Community Edition](https://sheetjs.com) (Apache 2.0)
   - [UTIF.js](https://github.com/photopea/UTIF.js) (MIT) and [pako](https://github.com/nodeca/pako) (MIT)
   - [heic2any](https://github.com/alexcorvi/heic2any) (MIT)
+- Nearby Sync:
+  - [PeerJS](https://peerjs.com) (MIT)
+  - [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) (MIT)
+  - [jsQR](https://github.com/cozmo/jsQR) (Apache 2.0)
 - Fonts are [Plus Jakarta Sans](https://fonts.google.com/specimen/Plus+Jakarta+Sans), [Outfit](https://fonts.google.com/specimen/Outfit) and [Cabin](https://fonts.google.com/specimen/Cabin) (SIL Open Font License).
 
 ---

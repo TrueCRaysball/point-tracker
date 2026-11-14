@@ -946,3 +946,136 @@ body:not(.mobile) .cards > .wcard { flex: 1 0 190px; scroll-snap-align: start; }
 
 /* Hidden where swiping is the way to scroll (phone cards, leave carousel, chip strip). */
 .m-strip::-webkit-scrollbar, .m-cards::-webkit-scrollbar, .lc-track::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+/* =====================================================================
+   Nearby Sync: settings section, pairing code, scanner, "synced" notice
+   ===================================================================== */
+.sync-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.sync-btns button { display: inline-flex; align-items: center; gap: 7px; }
+.sync-device > span:first-child { display: flex; align-items: center; gap: 8px; }
+.sync-device svg { color: var(--blue); }
+.sync-line { padding: 2px 12px 4px; font-size: 13px; }
+.sync-line > span, #sync-pair-status, #sync-join-status { display: inline-flex; align-items: center; gap: 7px; }
+.sync-err { color: var(--red); display: inline-flex; align-items: center; gap: 7px; }
+.sync-ok { color: var(--green); display: inline-flex; align-items: center; gap: 7px; font-weight: 600; }
+svg.lucide-loader-circle { animation: spin 0.9s linear infinite; }
+.sync-qr {
+  align-self: center; width: min(240px, 70vw); aspect-ratio: 1; padding: 0; border-radius: 14px; overflow: hidden;
+  background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.sync-qr svg { display: block; width: 100%; height: 100%; }
+.sync-code {
+  align-self: center; text-align: center; font: 600 15px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  letter-spacing: 0.04em; user-select: all; -webkit-user-select: all; cursor: text; max-width: 320px; word-spacing: 2px;
+}
+.sync-pair { align-items: stretch; }
+.sync-cam { aspect-ratio: 1; width: min(280px, 100%); align-self: center; border-radius: 14px; overflow: hidden; background: #000;
+  display: grid; place-items: center; text-align: center; padding: 0; }
+.sync-cam .muted { color: #cfd6e4; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.sync-cam video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sync-code-input { width: 100%; font: 600 14px ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing: 0.03em; text-transform: uppercase; }
+.sync-toast {
+  position: fixed; z-index: 15; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  display: flex; align-items: center; gap: 9px; padding: 10px 16px; border-radius: 999px; max-width: calc(100vw - 32px);
+  background: var(--popover); border: 1px solid color-mix(in srgb, var(--green) 50%, transparent);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); font-size: 13px; font-weight: 600; animation: toast-in 0.22s ease-out;
+  transition: opacity 0.4s, transform 0.4s;
+}
+.sync-toast svg { color: var(--green); flex: none; }
+.sync-toast.hide { opacity: 0; transform: translate(-50%, 10px); }
+body.mobile .sync-toast { bottom: calc(86px + env(safe-area-inset-bottom)); }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 12px); } }
+
+/* =====================================================================
+   What's New splash (first launch of a new version) and About buttons
+   ===================================================================== */
+.about-actions { display: flex; gap: 8px; margin-top: 14px; }
+.about-actions button { display: inline-flex; align-items: center; gap: 7px; justify-content: center; }
+.about .about-actions .btn-primary { margin-top: 0; }
+.dialog:has(.whatsnew) { width: 620px; }
+.whatsnew { display: flex; flex-direction: column; }
+.wn-hero {
+  position: relative; overflow: hidden; display: flex; align-items: center; gap: 16px; padding: 24px 22px 22px;
+  background: var(--hero-bg); color: var(--hero-text); border-bottom: 1px solid var(--panel-border);
+}
+.wn-art {
+  position: absolute; top: 0; bottom: 0; right: -40px; width: 300px; pointer-events: none; opacity: 0.55;
+  background: var(--hero-art) center bottom / cover no-repeat;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 45%, #000 80%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 45%, #000 80%, transparent 100%);
+}
+.wn-hero > img { position: relative; width: 68px; height: 68px; flex: none; filter: drop-shadow(0 4px 14px rgba(47, 128, 255, 0.45)); }
+.wn-hero > div:not(.wn-art) { position: relative; min-width: 0; }
+.wn-kicker { display: inline-flex; align-items: center; gap: 6px; font: 700 12px var(--font-head); letter-spacing: 0.06em; text-transform: uppercase; color: #8fc0ff; }
+.wn-hero h2 { margin: 2px 0 2px; font: 700 24px/1.15 var(--font-head); letter-spacing: -0.01em; }
+.wn-sub { color: var(--hero-sub); font-size: 13.5px; }
+.wn-body { padding: 18px 20px 6px; display: flex; flex-direction: column; gap: 12px; }
+.wn-ver { margin: 6px 0 -2px; font: 700 12px var(--font-head); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text2); }
+.wn-ver:first-child { margin-top: 0; }
+.wn-cards { display: flex; flex-direction: column; gap: 10px; }
+.wn-card {
+  display: flex; gap: 14px; align-items: flex-start; padding: 14px; border-radius: 12px;
+  background: color-mix(in srgb, var(--c) 8%, transparent); border: 1px solid color-mix(in srgb, var(--c) 28%, transparent);
+  animation: wn-in 0.35s ease-out both;
+}
+.wn-card:nth-child(2) { animation-delay: 0.06s; } .wn-card:nth-child(3) { animation-delay: 0.12s; } .wn-card:nth-child(4) { animation-delay: 0.18s; }
+.wn-icon {
+  flex: none; width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; font-size: 20px;
+  color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent);
+}
+.wn-card b { font: 700 15px var(--font-head); }
+.wn-card p { margin: 3px 0 0; color: var(--text2); font-size: 13.5px; line-height: 1.45; }
+.wn-also { padding: 4px 2px 8px; }
+.wn-also-head { font: 700 12px var(--font-head); letter-spacing: 0.04em; text-transform: uppercase; color: var(--text2); margin-bottom: 6px; }
+.wn-also ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; line-height: 1.45; }
+.wn-also li::marker { color: var(--blue); }
+@keyframes wn-in { from { opacity: 0; transform: translateY(6px); } }
+body.mobile .dialog:has(.whatsnew) { width: 100%; }
+body.mobile .wn-hero { padding: 18px 16px; gap: 12px; }
+body.mobile .wn-hero > img { width: 54px; height: 54px; }
+body.mobile .wn-hero h2 { font-size: 20px; }
+body.mobile .wn-body { padding: 14px 14px 4px; }
+:root[data-theme="light"] .wn-kicker { color: var(--blue); }
+
+/* =====================================================================
+   Welcome (first launch) and guided tour
+   ===================================================================== */
+.link-btn { background: none; border: 0; padding: 4px 2px; color: var(--blue); font-weight: 600; font-size: 13.5px; align-self: center; }
+.link-btn:hover { text-decoration: underline; }
+.dialog:has(.welcome) { width: 520px; }
+.wl-option {
+  display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; padding: 14px; border-radius: 12px;
+  background: color-mix(in srgb, var(--c) 8%, transparent); border: 1px solid color-mix(in srgb, var(--c) 28%, transparent);
+  color: var(--text); transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.wl-option:hover { background: color-mix(in srgb, var(--c) 15%, transparent); border-color: color-mix(in srgb, var(--c) 55%, transparent); }
+.wl-option:active { transform: scale(0.99); }
+.wl-option > div { flex: 1; min-width: 0; }
+.wl-option b { font: 700 15.5px var(--font-head); }
+.wl-option p { margin: 3px 0 0; color: var(--text2); font-size: 13.5px; line-height: 1.4; }
+.wl-option > svg:last-child { color: var(--text2); flex: none; }
+.welcome .wn-body { padding-bottom: 14px; }
+.wl-actions { justify-content: center; }
+
+.tour { position: fixed; inset: 0; z-index: 40; animation: vw-fade 0.18s ease-out; }
+.tour.leaving { opacity: 0; transition: opacity 0.18s; }
+.tour-spot {
+  position: fixed; border-radius: 12px; pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(2, 8, 20, 0.66), 0 0 0 2px var(--blue), 0 0 24px 4px rgba(47, 128, 255, 0.45);
+  transition: top 0.28s ease, left 0.28s ease, width 0.28s ease, height 0.28s ease;
+}
+.tour-spot.none { top: 50% !important; left: 50% !important; width: 0 !important; height: 0 !important; box-shadow: 0 0 0 9999px rgba(2, 8, 20, 0.66); }
+.tour-card {
+  position: fixed; padding: 16px 16px 12px; border-radius: 14px; background: var(--popover); color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--blue) 45%, transparent); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  transition: top 0.28s ease, left 0.28s ease;
+}
+.tour-count { font: 700 11.5px var(--font-head); letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue); }
+.tour-card h3 { margin: 4px 0 4px; font: 700 17px var(--font-head); }
+.tour-card p { margin: 0; color: var(--text2); font-size: 13.5px; line-height: 1.5; }
+.tour-card p b { color: var(--text); }
+.tour-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.tour-gap { flex: 1; }
+.tour-skip { background: none; border: 0; padding: 4px 0; color: var(--text2); font-size: 13px; }
+.tour-skip:hover { color: var(--text); }
+.tour-actions .btn-primary, .tour-actions .btn-subtle { padding: 7px 14px; font-size: 13.5px; }

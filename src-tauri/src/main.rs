@@ -174,6 +174,12 @@ fn read_attachment(app: AppHandle, file: String) -> Result<String, String> {
     Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
 }
 
+/// Whether an attachment file is stored on this device (Nearby Sync fetches the missing ones).
+#[tauri::command]
+fn attachment_exists(app: AppHandle, file: String) -> Result<bool, String> {
+    Ok(attachment_path(&app, &file)?.is_file())
+}
+
 /// Raw file contents, for the in-app viewer (no base64 round trip).
 #[tauri::command]
 fn read_attachment_bytes(app: AppHandle, file: String) -> Result<tauri::ipc::Response, String> {
@@ -342,7 +348,8 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             load_data, save_data, write_text_file, read_text_file, app_info,
-            import_attachment, save_attachment_bytes, read_attachment, read_attachment_bytes, open_attachment, delete_attachment, restore_attachment,
+            import_attachment, save_attachment_bytes, read_attachment, read_attachment_bytes,
+            attachment_exists, open_attachment, delete_attachment, restore_attachment,
             export_backup, import_backup
         ])
         .run(tauri::generate_context!())
