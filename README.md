@@ -33,6 +33,7 @@ Get the latest version from the [**Releases**](../../releases) page.
 | Windows 32-bit | `Point.Tracker_x.y.z_x86-setup.exe` |
 | Linux 64-bit (Intel/AMD) | `.AppImage`, `.deb` (Ubuntu/Debian) or `.rpm` (Fedora) marked `amd64` / `x86_64` |
 | Linux 64-bit (ARM) | `.AppImage`, `.deb` or `.rpm` marked `aarch64` / `arm64` |
+| Arch Linux (and Manjaro, EndeavourOS) | From the AUR: `yay -S point-tracker-bin` (Intel/AMD and ARM) |
 
 Intel Macs are not supported.
 
@@ -97,6 +98,13 @@ Pushing a tag such as `v1.2.0` runs the [release workflow](.github/workflows/rel
 ```json
 { "buildsDir": "../Builds" }
 ```
+
+## Arch Linux package (AUR)
+
+Arch users get Point Tracker from the AUR as `point-tracker-bin`. It installs the `.deb` from each GitHub release. After a release is published:
+
+1. Run `node scripts/aur.mjs`. It downloads that release's `.deb` files and writes `packaging/aur/PKGBUILD` and `.SRCINFO` with the new version and checksums.
+2. Copy both files into the AUR repository (`ssh://aur@aur.archlinux.org/point-tracker-bin.git`), then commit and push.
 
 ## Credits
 

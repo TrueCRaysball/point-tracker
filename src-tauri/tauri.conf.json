@@ -37,6 +37,9 @@
       "icons/icon.ico"
     ],
     "copyright": "Copyright © 2026 CRaysball Softworks. All rights reserved.",
+    "category": "Productivity",
+    "shortDescription": "Track attendance points, reprimands and medical leave",
+    "longDescription": "Point Tracker keeps track of attendance points, reprimands and medical leave, shows when points drop off and reprimands expire, and syncs between your computer and phone without an account.",
     "publisher": "CRaysball Softworks"
   }
 }

@@ -1,4 +1,5 @@
-# Publishes the Home Screen (web) version of Point Tracker to GitHub Pages on every push to main.
+# Publishes the Home Screen (web) version of Point Tracker to GitHub Pages when a push to main changes the app.
+# (Docs, packaging and desktop-only changes don't redeploy, so phones don't get "Update ready" for nothing.)
 # One-time setup: repository Settings → Pages → Source: "GitHub Actions".
 # The site holds only the app's files. Each person's data stays on their own device.
 name: Web app (GitHub Pages)
@@ -6,6 +7,15 @@ name: Web app (GitHub Pages)
 on:
   push:
     branches: [main]
+    paths:
+      - "src/**"
+      - "sample/**"
+      - "scripts/web.mjs"
+      - "scripts/vendor.mjs"
+      - "scripts/stamp.mjs"
+      - "tools/web/**"
+      - "package.json"
+      - "package-lock.json"
   workflow_dispatch:
 
 permissions:

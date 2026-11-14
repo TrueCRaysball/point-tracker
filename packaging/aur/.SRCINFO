@@ -1,0 +1,20 @@
+pkgbase = point-tracker-bin
+	pkgdesc = Track attendance points, reprimands and medical leave
+	pkgver = 1.7.1
+	pkgrel = 1
+	url = https://github.com/TrueCRaysball/point-tracker
+	arch = x86_64
+	arch = aarch64
+	license = LicenseRef-CRaysball-Softworks
+	depends = webkit2gtk-4.1
+	depends = gtk3
+	provides = point-tracker
+	conflicts = point-tracker
+	options = !strip
+	options = !debug
+	source_x86_64 = point-tracker-1.7.1-x86_64.deb::https://github.com/TrueCRaysball/point-tracker/releases/download/v1.7.1/Point.Tracker_1.7.1_amd64.deb
+	sha256sums_x86_64 = 88ec0d2a9cc5e4c523ccba2f0e7e732f57c0bc427c23c980d09fcc6ea77449b4
+	source_aarch64 = point-tracker-1.7.1-aarch64.deb::https://github.com/TrueCRaysball/point-tracker/releases/download/v1.7.1/Point.Tracker_1.7.1_arm64.deb
+	sha256sums_aarch64 = de0f7ad4fbc4b1222f6e6fc64392c7ecc2dad6407c90d328a5f92f6a05c93fc5
+
+pkgname = point-tracker-bin
