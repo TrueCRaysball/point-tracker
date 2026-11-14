@@ -279,6 +279,13 @@ struct AppInfo {
     version: String,
     build: String,
     copyright: String,
+    /// "macos", "windows" or "linux", and "aarch64", "x86_64" or "x86": picks the right update download.
+    os: String,
+    arch: String,
+    /// True when the app can install updates itself: macOS, Windows and the Linux AppImage. Linux
+    /// .deb/.rpm/AUR installs belong to the package manager, and the demo would install the real app
+    /// over itself, so those only get told about new versions.
+    self_update: bool,
 }
 
 /// Name, version, build number and copyright for the in-app About window.
@@ -290,6 +297,10 @@ fn app_info(app: AppHandle) -> AppInfo {
         version: info.version.to_string(),
         build: BUILD_NUMBER.into(),
         copyright: COPYRIGHT.into(),
+        os: std::env::consts::OS.into(),
+        arch: std::env::consts::ARCH.into(),
+        self_update: !is_demo(&app)
+            && (!cfg!(target_os = "linux") || std::env::var_os("APPIMAGE").is_some()),
     }
 }
 
@@ -346,6 +357,8 @@ fn main() {
         })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             load_data, save_data, write_text_file, read_text_file, app_info,
             import_attachment, save_attachment_bytes, read_attachment, read_attachment_bytes,

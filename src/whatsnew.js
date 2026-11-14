@@ -8,6 +8,24 @@
 
 export const NOTES = [
   {
+    version: "1.8.0",
+    features: [
+      {
+        icon: "download", color: "blue", title: "Updates Install Themselves",
+        text: "On Mac and Windows, Point Tracker now checks for new versions on its own. When one is out, click Install Update and it downloads, installs and restarts by itself, with no more dragging into Applications. Your records stay just as they are.",
+      },
+      {
+        icon: "flask-conical", color: "purple", title: "Point Tracker Is in Beta",
+        text: "It's still being polished, so things may change as it grows. Look for the BETA badge next to the name.",
+      },
+    ],
+    also: [
+      "Check for updates any time in Settings → Help or the About box.",
+      "Linux: the AppImage updates itself too. Installs from a package manager (.deb, .rpm, AUR) get a notice instead.",
+      "The Home Screen (phone) version keeps updating itself the way it always has.",
+    ],
+  },
+  {
     version: "1.7.1",
     also: [
       "The What's New screen now waits until an update has finished installing, so you get to read it.",
@@ -54,6 +72,16 @@ export const NOTES = [
     ],
   },
 ];
+
+// Release stage shown with every version number ("Beta 1.8.0"). The version itself stays a plain
+// number, which the updater and GitHub's "latest release" need. Set STAGE to "" when the beta is over.
+export const STAGE = "Beta";
+
+/** How a version is shown to people: "Beta 1.8.0". */
+export function versionName(v) {
+  if (!v || !STAGE || !/^\d/.test(v)) return v;
+  return `${STAGE} ${v}`;
+}
 
 /** -1, 0 or 1, comparing "1.6.0"-style versions. */
 export function compareVersions(a, b) {

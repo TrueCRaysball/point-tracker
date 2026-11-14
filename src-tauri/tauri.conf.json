@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Point Tracker",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "identifier": "com.craysball.pointtracker",
   "build": {
     "frontendDist": "../src",
@@ -41,5 +41,16 @@
     "shortDescription": "Track attendance points, reprimands and medical leave",
     "longDescription": "Point Tracker keeps track of attendance points, reprimands and medical leave, shows when points drop off and reprimands expire, and syncs between your computer and phone without an account.",
     "publisher": "CRaysball Softworks"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEYwNkI3Njg1RkE0RDcyNjAKUldSZ2NrMzZoWFpyOE5IMG9aQ01TdEd4TkFNWWxKcnR4MWtLTlpEWFpibUNweDhsV1EvYm5ZdUUK",
+      "endpoints": [
+        "https://github.com/TrueCRaysball/point-tracker/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

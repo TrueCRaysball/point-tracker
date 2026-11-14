@@ -308,10 +308,11 @@ async function showAbout() {
     <div class="about">
       <img src="vendor/${env.demo ? "app-icon-demo" : "app-icon"}.png" alt="" draggable="false">
       <h2>${esc(info.name)}</h2>
-      <div>Version ${esc(info.version)} (Build ${esc(info.build)})</div>
+      <div>${W.STAGE ? "" : "Version "}${esc(W.versionName(info.version))} (Build ${esc(info.build)})</div>
       <div class="muted">${esc(info.copyright)}</div>
       <div class="muted small">Not affiliated with or endorsed by The Walt Disney Company (TWDC).</div>
       <div class="about-actions"><button class="btn-subtle" data-action="whats-new">${icon("sparkles")} What's New</button>
+        ${tauri ? `<button class="btn-subtle" data-action="check-updates">${icon("download")} Check for Updates</button>` : ""}
         <button class="btn-primary" data-action="close">OK</button></div>
     </div>`);
 }
@@ -443,12 +444,12 @@ async function showWhatsNew(notes, version, { markSeen = false } = {}) {
       <div class="wn-hero">
         <div class="wn-art"></div>
         <img src="vendor/${env.demo ? "app-icon-demo" : "app-icon"}.png" alt="" draggable="false">
-        <div><div class="wn-kicker">${icon("sparkles")} What's New</div><h2>Point Tracker ${esc(version)}</h2>
+        <div><div class="wn-kicker">${icon("sparkles")} What's New</div><h2>Point Tracker ${esc(W.versionName(version))}</h2>
           <div class="wn-sub">Here's what's new since you last opened the app.</div></div>
       </div>
       <div class="wn-body">
         ${notes.map((n) => `
-          ${many ? `<h3 class="wn-ver">Version ${esc(label(n.version))}</h3>` : ""}
+          ${many ? `<h3 class="wn-ver">Version ${esc(W.versionName(label(n.version)))}</h3>` : ""}
           <div class="wn-cards">${(n.features ?? []).map((f) => `
             <div class="wn-card c-${f.color ?? "blue"}"><span class="wn-icon">${icon(f.icon)}</span>
               <div><b>${esc(f.title)}</b><p>${esc(f.text)}</p></div></div>`).join("")}</div>
@@ -615,12 +616,17 @@ function initSync() {
 let syncToastWanted = false;
 function syncToast(r) {
   syncToastWanted = false;
-  document.getElementById("sync-toast")?.remove();
   const parts = [];
   if (r.changes) parts.push(`${r.changes} update${r.changes === 1 ? "" : "s"}`);
   if (r.files) parts.push(`${r.files} document${r.files === 1 ? "" : "s"}`);
+  toast("refresh-cw", parts.length ? `Synced with ${esc(r.name)} · ${parts.join(", ")}` : `Up to date with ${esc(r.name)}`);
+}
+
+/** A short message at the bottom of the screen that goes away on its own. html is already escaped. */
+function toast(iconName, html) {
+  document.getElementById("sync-toast")?.remove();
   const n = Object.assign(document.createElement("div"), { id: "sync-toast", className: "sync-toast" });
-  n.innerHTML = `${icon("refresh-cw")}<span>${parts.length ? `Synced with ${esc(r.name)} · ${parts.join(", ")}` : `Up to date with ${esc(r.name)}`}</span>`;
+  n.innerHTML = `${icon(iconName)}<span>${html}</span>`;
   document.body.append(n);
   lucide.createIcons();
   setTimeout(() => n.classList.add("hide"), 3200);
@@ -957,6 +963,7 @@ function hero() {
         <div class="title">Point Tracker</div>
         <div class="subtitle">Attendance Points and Reprimands</div>
       </div>
+      ${betaBadge()}
       ${env.demo ? `<span class="badge">DEMO · Sample data</span>` : ""}
       <span class="spacer" data-tauri-drag-region></span>
       ${over ? `<button class="btn-subtle glass" style="color:var(--amber)" data-action="today">Back to Today</button>` : ""}
@@ -1779,7 +1786,7 @@ function mHeader() {
     <div class="hero-art"></div>
     <div class="m-head-row">
       <img class="logo" src="vendor/logo.png" alt="" draggable="false">
-      <div class="m-title-wrap"><div class="title">Point Tracker</div>${env.demo ? `<span class="badge">DEMO</span>` : ""}</div>
+      <div class="m-title-wrap"><div class="title">Point Tracker</div>${betaBadge()}${env.demo ? `<span class="badge">DEMO</span>` : ""}</div>
       <span class="spacer"></span>
       <button class="m-date ${over ? "override" : ""}" data-action="calendar">${icon("calendar")} ${MONTH_NAMES[d.m].slice(0, 3)} ${d.d}</button>
       <button class="m-iconbtn ${ui.mpage === "settings" ? "on" : ""}" data-action="m-page" data-page="settings" aria-label="Settings">${icon("settings")}</button>
@@ -1923,12 +1930,17 @@ function mCalendar(ev) {
     ${items.length || selLeaves ? `<div class="m-cal-items">${selLeaves}${items.map((it) => calPill(it, ev)).join("")}</div>` : `<div class="m-empty small">Nothing on this day.</div>`}`;
 }
 
+/** "BETA" next to the app name in the header while the app is in a release stage (see whatsnew.js). */
+const betaBadge = () => W.STAGE
+  ? `<span class="badge badge-stage" title="Point Tracker is in ${esc(W.STAGE.toLowerCase())}: it's still being polished, so things may change.">${esc(W.STAGE.toUpperCase())}</span>`
+  : "";
+
 /** Fills in the version on the phone's About row. */
 async function showVersionInSettings() {
   const v = tauri ? await tauri.core.invoke("app_info").catch(() => null)
     : await fetch("version.json").then((r) => r.json()).catch(() => null);
   const el = document.getElementById("m-version");
-  if (el && v?.version) el.textContent = `v${v.version}`;
+  if (el && v?.version) el.textContent = W.STAGE && W.versionName(v.version) !== v.version ? W.versionName(v.version) : `v${v.version}`;
 }
 
 function mSettings() {
@@ -2301,6 +2313,9 @@ function settingsPage(lead = "") {
         <div class="field"><span>New here, or need a refresher?</span><span class="sync-btns">
           <button class="btn-subtle" data-action="start-tour">${icon("map")} Take the Tour</button>
           <button class="btn-subtle" data-action="whats-new">${icon("sparkles")} What's New</button></span></div>
+        ${tauri ? `<div class="field"><span>Updates</span><span class="sync-btns">
+          <button class="btn-subtle" data-action="check-updates">${icon("download")} Check for Updates</button></span></div>
+        <div class="note">Point Tracker checks GitHub for a new version when it opens and every 15 minutes. Only the version number is looked up; none of your records are sent.</div>` : ""}
       </div>
       <div class="group"><h3>Data</h3>
         <div class="field"><span>Backup</span><span><button class="btn-subtle" data-action="export">Export Backup…</button>
@@ -2360,6 +2375,9 @@ document.addEventListener("click", (ev) => {
     case "close": closeOverlay(); break;
     case "sync-pair": showPairDialog(); break;
     case "whats-new": showWhatsNew(); break;
+    case "check-updates": checkForUpdates({ manual: true }); break;
+    case "update-download": openRelease(t.dataset.url); break;
+    case "update-install": installUpdate(); break;
     case "start-tour": case "intro-tour": startAppTour(); break;
     case "intro-skip": closeOverlay(); break;
     case "intro-sync":
@@ -2526,7 +2544,7 @@ document.addEventListener("click", (ev) => {
       break;
     }
     case "update-now": location.reload(); break;
-    case "update-dismiss": document.getElementById("update-notice")?.remove(); break;
+    case "update-dismiss": dismissedUpdate = document.getElementById("update-notice")?.dataset.version ?? null; document.getElementById("update-notice")?.remove(); break;
     case "page": if (t.dataset.page === "leaves") ui.leaveView = null; ui.page = t.dataset.page; ui.expanded = null; closeOverlay(); render(); break;
     case "expand": ui.expanded = t.dataset.table; render(); break;
     case "collapse": ui.expanded = null; render(); break;
@@ -2836,12 +2854,106 @@ async function showUpdateNotice() {
   const v = await fetch("version.json", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
   const n = Object.assign(document.createElement("div"), { id: "update-notice", className: "update-notice" });
   n.innerHTML = `${icon("download")}
-    <div><b class="head">Update ready${v?.version ? ` · v${esc(v.version)} (Build ${esc(v.build)})` : ""}</b>
+    <div><b class="head">Update ready${v?.version ? ` · ${esc(W.versionName(v.version))} (Build ${esc(v.build)})` : ""}</b>
       <div>Close and reopen Point Tracker to finish updating.</div></div>
     <button class="btn-primary small" data-action="update-now">Update Now</button>
     <button class="update-x" data-action="update-dismiss" aria-label="Dismiss">${icon("x")}</button>`;
   document.body.append(n);
   lucide.createIcons();
+}
+
+// ---------- Desktop updates (GitHub releases) ----------
+// Uses Tauri's updater: it reads latest.json from the newest published release (GitHub's file servers,
+// not its rate-limited API), and installs only updates signed with the project's signing key.
+
+const RELEASES = "https://github.com/TrueCRaysball/point-tracker/releases";
+const UPDATE_CHECK_EVERY = 15 * 60 * 1000;
+let dismissedUpdate = null; // a version whose notice was closed: not shown again until the next launch
+let lastUpdateCheck = 0;
+let pendingUpdate = null; // the updater's Update object for the version in the notice
+let installing = false;
+
+/** Opens a release page in the browser (only ever this app's own GitHub releases). */
+function openRelease(url) {
+  if (!url?.startsWith(`${RELEASES}/`)) url = `${RELEASES}/latest`;
+  tauri.opener.openUrl(url).catch((err) => alert(`Couldn't open GitHub: ${err}`));
+}
+
+/** Desktop: looks for a newer version. manual: say so when there isn't one or GitHub can't be reached. */
+async function checkForUpdates({ manual = false } = {}) {
+  if (!tauri?.updater || installing) return;
+  lastUpdateCheck = Date.now();
+  try {
+    const update = await tauri.updater.check({ timeout: 30000 });
+    if (!update) {
+      if (manual) toast("circle-check", `You're on the latest version (${esc(W.versionName(await appVersion()))}).`);
+      return;
+    }
+    if (!manual && update.version === dismissedUpdate) return;
+    pendingUpdate = update;
+    showDesktopUpdate(await tauri.core.invoke("app_info"), update);
+  } catch (err) {
+    console.error("Update check failed:", err);
+    if (manual) toast("wifi-off", `Couldn't check for updates. Check your internet connection and try again. <span class="muted">(${esc(String(err))})</span>`);
+  }
+}
+
+function showDesktopUpdate(info, update) {
+  if (overlay?.kind === "welcome") return setTimeout(() => showDesktopUpdate(info, update), 15000); // after the intro
+  document.getElementById("update-notice")?.remove();
+  const page = `${RELEASES}/tag/v${update.version}`;
+  const how = info.self_update ? "Install it now; Point Tracker restarts when it's done."
+    : info.os === "linux" ? "Update it with your package manager, or download it from GitHub."
+    : "Download it from GitHub.";
+  const n = Object.assign(document.createElement("div"), { id: "update-notice", className: "update-notice" });
+  n.dataset.version = update.version;
+  n.innerHTML = `${icon("download")}
+    <div><b class="head">${/^\d/.test(W.versionName(update.version)) ? "Version " : ""}${esc(W.versionName(update.version))} is available</b>
+      <div class="update-text">You have ${esc(W.versionName(info.version))}. ${how} Your records stay just as they are.</div></div>
+    ${info.self_update ? `<button class="btn-primary small" data-action="update-install">Install Update</button>`
+      : `<button class="btn-primary small" data-action="update-download" data-url="${esc(page)}">View on GitHub</button>`}
+    <button class="update-x" data-action="update-dismiss" aria-label="Not now">${icon("x")}</button>`;
+  document.body.append(n);
+  lucide.createIcons();
+}
+
+/** Downloads and installs the update in the notice, then restarts (Windows' installer restarts it itself). */
+async function installUpdate() {
+  const n = document.getElementById("update-notice");
+  if (!pendingUpdate || !n || installing) return;
+  installing = true;
+  const head = n.querySelector(".head"), text = n.querySelector(".update-text");
+  n.querySelectorAll("button").forEach((b) => b.remove());
+  head.textContent = `Updating to ${W.versionName(pendingUpdate.version)}…`;
+  text.textContent = "Downloading…";
+  try {
+    // Make sure everything is on disk before the app is replaced.
+    await tauri.core.invoke("save_data", { json: JSON.stringify(data, null, 2) });
+    let total = 0, got = 0;
+    await pendingUpdate.downloadAndInstall((ev) => {
+      if (ev.event === "Started") total = ev.data.contentLength ?? 0;
+      else if (ev.event === "Progress") {
+        got += ev.data.chunkLength;
+        text.textContent = total ? `Downloading… ${Math.min(100, Math.round((got / total) * 100))}%` : "Downloading…";
+      } else if (ev.event === "Finished") text.textContent = "Installing…";
+    });
+    text.textContent = "Restarting…";
+    await tauri.process.relaunch();
+  } catch (err) {
+    installing = false;
+    head.textContent = "The update didn't install";
+    text.textContent = `${err}. You can try again later or download it from GitHub.`;
+    n.insertAdjacentHTML("beforeend", `<button class="btn-primary small" data-action="update-download" data-url="${esc(`${RELEASES}/tag/v${pendingUpdate.version}`)}">View on GitHub</button>
+      <button class="update-x" data-action="update-dismiss" aria-label="Close">${icon("x")}</button>`);
+    lucide.createIcons();
+  }
+}
+
+/** Checks a few seconds after opening, then every 15 minutes (and on coming back after that long). */
+function setupDesktopUpdates() {
+  setTimeout(() => checkForUpdates(), 5000);
+  setInterval(() => checkForUpdates(), UPDATE_CHECK_EVERY);
+  addEventListener("focus", () => { if (Date.now() - lastUpdateCheck > UPDATE_CHECK_EVERY) checkForUpdates(); });
 }
 
 await load();
@@ -2852,4 +2964,5 @@ render();
 startAutosave();
 lastSide = sideBySide();
 initSync();
+if (tauri) setupDesktopUpdates();
 maybeShowIntro().then((shown) => { if (!shown) maybeShowWhatsNew(); });

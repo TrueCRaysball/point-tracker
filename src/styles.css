@@ -118,6 +118,7 @@ svg.lucide { width: 1em; height: 1em; stroke-width: 2.2; vertical-align: -0.125e
   font-size: 12px; font-weight: 700; color: var(--amber); padding: 4px 10px; border-radius: 99px;
   background: color-mix(in srgb, var(--amber) 15%, transparent); border: 1px solid color-mix(in srgb, var(--amber) 60%, transparent);
 }
+.badge-stage { color: var(--blue); background: color-mix(in srgb, var(--blue) 15%, transparent); border-color: color-mix(in srgb, var(--blue) 60%, transparent); letter-spacing: 0.06em; cursor: default; }
 .datenav {
   display: flex; align-items: center; height: 38px; border-radius: 10px; position: relative; color: var(--text);
   background: var(--glass); border: 1px solid rgba(var(--ink), 0.14);
@@ -989,8 +990,10 @@ body.mobile .sync-toast { bottom: calc(86px + env(safe-area-inset-bottom)); }
 /* =====================================================================
    What's New splash (first launch of a new version) and About buttons
    ===================================================================== */
-.about-actions { display: flex; gap: 8px; margin-top: 14px; }
-.about-actions button { display: inline-flex; align-items: center; gap: 7px; justify-content: center; }
+.about-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 14px; }
+.about-actions button { display: inline-flex; align-items: center; gap: 7px; justify-content: center; white-space: nowrap; }
+/* Three buttons (desktop, with Check for Updates): the two extras side by side, OK across the bottom. */
+.about-actions:has(> :nth-child(3)) .btn-primary { flex-basis: 100%; }
 .about .about-actions .btn-primary { margin-top: 0; }
 .dialog:has(.whatsnew) { width: 620px; }
 .whatsnew { display: flex; flex-direction: column; }

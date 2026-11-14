@@ -15,6 +15,8 @@
     "dialog:allow-open",
     "dialog:allow-ask",
     "dialog:allow-message",
+    "updater:default",
+    "process:allow-restart",
     {
       "identifier": "opener:allow-open-url",
       "allow": [
@@ -35,6 +37,9 @@
         },
         {
           "url": "https://disney.service-now.com/*"
+        },
+        {
+          "url": "https://github.com/TrueCRaysball/point-tracker/releases/*"
         }
       ]
     }

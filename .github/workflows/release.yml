@@ -1,6 +1,10 @@
 # Builds Point Tracker for every supported platform and attaches the installers to a draft GitHub release.
 # Trigger: push a tag like v1.2.0 (or run it manually from the Actions tab).
 #
+# Also builds signed update packages and latest.json, which installed apps read (from the newest
+# published release) to update themselves. Signing needs two repository secrets:
+# TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD (see README, "Updates").
+#
 # Supported: macOS Apple Silicon · Windows 64-bit and 32-bit · Linux 64-bit (x86_64 and ARM64).
 # Builds are unsigned for now; see README for first-launch steps.
 name: Release
@@ -72,16 +76,20 @@ jobs:
       - run: npm ci
 
       - name: Stamp build number
-        run: node scripts/stamp.mjs
+        run: node scripts/stamp.mjs --updater
 
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('v__VERSION__-build.{0}', env.PT_BUILD_NUMBER) }}
-          releaseName: Point Tracker v__VERSION__
+          releaseName: Point Tracker Beta __VERSION__
           releaseBody: |
-            **Point Tracker v__VERSION__** (build ${{ env.PT_BUILD_NUMBER }})
+            **Point Tracker Beta __VERSION__** (build ${{ env.PT_BUILD_NUMBER }})
+
+            Already have 1.8.0 or newer on your computer? It updates itself; you'll see a notice when this version is out.
 
             Download the file for your computer:
             - **Mac (Apple Silicon, M1 or newer):** `.dmg`
@@ -95,5 +103,8 @@ jobs:
 
             Not affiliated with or endorsed by The Walt Disney Company (TWDC).
           releaseDraft: true
+          # Not a pre-release: "latest release" (which the updater reads) skips those.
           prerelease: false
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
           args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --config src-tauri/tauri.build.conf.json

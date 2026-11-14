@@ -6,6 +6,8 @@
 
 <p align="center">A desktop app for keeping track of attendance points and reprimands.</p>
 
+<p align="center"><b>Beta:</b> Point Tracker is still being polished, so things may change.</p>
+
 > **Disclaimer:** Point Tracker is an independent tool. It is **not affiliated with or endorsed by The Walt Disney Company (TWDC)**. It is for informational purposes only. CastLife has your official record.
 
 ## Features
@@ -19,6 +21,7 @@
 - **Calendar:** a month view of every day you called out.
 - **Built-in file viewer:** attachments open right in the app, with no other program needed. It handles PDFs, Word documents (.docx), spreadsheets (Excel, CSV, OpenDocument), images (JPG, PNG, GIF, WebP, HEIC, SVG, TIFF and more), text and RTF files, and audio or video. Anything else can still be opened with another app.
 - **Nearby Sync:** pair your computer and phone once with a QR code, and they keep each other up to date (call-ins, reprimands, medical leaves, documents and settings) with no account and no cloud storage. Both need Point Tracker open at the same time. Changes are merged, so nothing gets overwritten. Not available on Linux builds whose web view lacks WebRTC.
+- **Updates install themselves (desktop, from 1.8.0):** the app checks for a new version when it opens and every 15 minutes. Click **Install Update** and it downloads, installs and restarts, on Mac, Windows and the Linux AppImage. Linux `.deb`, `.rpm` and AUR installs get a notice instead, since the package manager handles those. The Home Screen version updates itself.
 - **Your data stays on your computer.** It saves automatically, and you can export and import backups.
 - **Light and dark mode.** Every rule (thresholds, windows, occurrence limits) can be changed in Settings.
 
@@ -98,6 +101,17 @@ Pushing a tag such as `v1.2.0` runs the [release workflow](.github/workflows/rel
 ```json
 { "buildsDir": "../Builds" }
 ```
+
+## Updates
+
+Installed apps (1.8.0 and newer) read `latest.json` from the newest **published** GitHub release, at `releases/latest/download/latest.json`. That's a download from GitHub's file servers, not its rate-limited API, so it holds up with any number of users. Drafts and pre-releases are skipped, so don't mark a release as a pre-release.
+
+The release workflow signs every update package, and the app installs only packages signed with the matching key. The public half is `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`. The private half and its password are repository secrets:
+
+- `TAURI_SIGNING_PRIVATE_KEY`: the contents of `~/.tauri/point-tracker-updater.key`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: the contents of `~/.tauri/point-tracker-updater.password`
+
+**Back up both files somewhere safe (a password manager).** If they're lost, installed apps can't accept any future update, and everyone has to download a new version by hand once.
 
 ## Arch Linux package (AUR)
 
