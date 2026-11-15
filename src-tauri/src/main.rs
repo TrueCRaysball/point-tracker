@@ -292,11 +292,35 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     Ok(menu)
 }
 
+/// The window opens at 1500×940. On smaller screens (a laptop, or Linux/Windows with a taskbar) that can
+/// reach past the usable area and hide the bottom of the app, so shrink it to fit and recenter it.
+fn fit_to_screen(app: &AppHandle) {
+    let Some(win) = app.get_webview_window("main") else { return };
+    let (Ok(Some(monitor)), Ok(outer)) = (win.current_monitor(), win.outer_size()) else { return };
+    let area = monitor.work_area();
+    if outer.width <= area.size.width && outer.height <= area.size.height {
+        return;
+    }
+    // Keep the frame (title bar, borders) out of the inner size we ask for.
+    let inner = win.inner_size().unwrap_or(outer);
+    let (frame_w, frame_h) = (outer.width.saturating_sub(inner.width), outer.height.saturating_sub(inner.height));
+    let w = outer.width.min(area.size.width).saturating_sub(frame_w);
+    let h = outer.height.min(area.size.height).saturating_sub(frame_h);
+    let _ = win.set_size(tauri::PhysicalSize::new(w, h));
+    // Center within the usable area (not the whole screen, which would put part of it under the taskbar).
+    let (ow, oh) = ((w + frame_w).min(area.size.width), (h + frame_h).min(area.size.height));
+    let _ = win.set_position(tauri::PhysicalPosition::new(
+        area.position.x + ((area.size.width - ow) / 2) as i32,
+        area.position.y + ((area.size.height - oh) / 2) as i32,
+    ));
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
             let menu = build_menu(app.handle())?;
             app.set_menu(menu)?;
+            fit_to_screen(app.handle());
             Ok(())
         })
         .on_menu_event(|app, event| {

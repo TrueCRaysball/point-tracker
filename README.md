@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/castle-app-icon.png" width="128" alt="Point Tracker icon">
+  <img src="assets/app-icon.png" width="128" alt="Point Tracker icon">
 </p>
 
 <h1 align="center">Point Tracker</h1>
@@ -128,6 +128,8 @@ Check the draft, then publish it; installed apps see the update once it's publis
 - **What's New** notes go in `src/whatsnew.js`, one entry per version.
 
 **Security policy:** `src/index.html` sets a Content Security Policy for both the desktop and phone versions: only the app's own files run, and the only outside connection is Nearby Sync's PeerJS server. It's a `<meta>` tag rather than `app.security.csp` in `tauri.conf.json`, because that setting would also cover the HEIC converter's page. That page, `vendor/viewer/heic-frame.html`, is built by `scripts/vendor.mjs`. Its converter needs `eval`, so it runs in a sandboxed frame with its own policy and no access to the app, its storage or the network.
+
+**Icons and artwork:** the app icons all come from the logo, `assets/logo.png`. Run `swift tools/icons/make_icons.swift`; its header lists the follow-up commands (`npx tauri icon …` for the desktop apps and `tools/icons/web_icons.sh` for the phone version). The header and progress-card waves are SVGs in `src/vendor/waves/`.
 
 **Optional settings:** create a `local.config.json` (it's ignored by git) to change where local builds go, for example:
 

@@ -2269,10 +2269,11 @@ function entryInfo(e) {
   if (x?.stringNumber) html += line("Occurrence", `${x.stringNumber} in ${longest} days`);
   if (x?.stringPosition) html += line("Call-in", `${x.stringPosition} of ${ev.settings.maxSickString} in this occurrence`, x.medicalLeave ? "red" : "");
   if (x?.medicalLeave) {
-    const l = leaveFor(e.id);
+    // The leave this call-in triggered, or else the one its date falls in.
+    const l = data.leaves.find((x) => x.triggerEntryId === e.id) ?? leaveCovering(e.date);
     html += l
-      ? line("Medical leave", `${Day.short(Day.parse(l.startDate))} – ${l.returnDate ? Day.short(Day.parse(l.returnDate)) : "ongoing"}${l.attachments?.length ? ` · ${l.attachments.length} document${l.attachments.length === 1 ? "" : "s"}` : ""}<br>
-          <button class="btn-subtle small" style="margin-top:6px" data-action="leave-edit" data-id="${l.id}">${icon("hospital")} Leave Details…</button>`)
+      ? line(leaveLabel(l), `${Day.short(Day.parse(l.startDate))} – ${l.returnDate ? Day.short(Day.parse(l.returnDate)) : "ongoing"}${l.attachments?.length ? ` · ${l.attachments.length} document${l.attachments.length === 1 ? "" : "s"}` : ""}<br>
+          <button class="btn-subtle small" style="margin-top:6px" data-action="leave-edit" data-id="${l.id}">${icon("pt-leave")} Leave Details…</button>`)
       : line("", "Medical leave triggered", "red");
   }
   if (used) html += line("Reprimand", detailsText(e, ev).split(" · ").find((t) => t.startsWith("Used in reprimand")) ?? "Used in a reprimand");

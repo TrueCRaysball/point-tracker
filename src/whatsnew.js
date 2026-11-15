@@ -8,6 +8,20 @@
 
 export const NOTES = [
   {
+    version: "2.0.0",
+    features: [
+      {
+        icon: "palette", color: "purple", title: "A Fresh New Look",
+        text: "A new logo and app icon, flowing waves across the top, glossy glass panels and pop-ups with gradient buttons, and progress cards that fill with a wave in their color, so you can see at a glance how close each window is to a reprimand.",
+      },
+    ],
+    also: [
+      "On smaller screens, Home and Calendar now scroll, so the call-in and reprimand tables are never cut off.",
+      "The window can be made shorter, to fit laptop screens with a taskbar.",
+      "Clicking a call-in that started a leave opens its details again, with a link to the leave.",
+    ],
+  },
+  {
     version: "1.8.2",
     features: [
       {

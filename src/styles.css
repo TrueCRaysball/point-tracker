@@ -14,8 +14,8 @@
   --panel: #0c1934;
   --panel-border: rgba(120, 160, 235, 0.16);
   --shadow: none;
-  --hero-bg: linear-gradient(180deg, #002448 0%, #01305c 100%);
-  --hero-art: url("vendor/header-dark.png");
+  --hero-bg: var(--bg); /* the waves fade into the page, so the header has no edge of its own */
+  --hero-art: url("vendor/waves/header.svg");
   --hero-text: #ffffff;
   --hero-sub: rgba(255, 255, 255, 0.7);
   --nav-bg: rgba(4, 16, 40, 0.55);
@@ -39,8 +39,8 @@
   --panel: #ffffff;
   --panel-border: rgba(30, 60, 120, 0.1);
   --shadow: 0 1px 3px rgba(20, 45, 95, 0.08);
-  --hero-bg: linear-gradient(180deg, #bedcfa 0%, #e3eefb 70%, #eff4fb 100%);
-  --hero-art: url("vendor/header-light.png");
+  --hero-bg: var(--bg);
+  --hero-art: url("vendor/waves/header-light.svg");
   --hero-text: #0d1b33;
   --hero-sub: rgba(13, 27, 51, 0.7);
   --nav-bg: rgba(255, 255, 255, 0.6);
@@ -85,16 +85,30 @@ svg.lucide { width: 1em; height: 1em; stroke-width: 2.2; vertical-align: -0.125e
 /* Pages fit the window; only the tables (and the long Settings page) scroll inside themselves. */
 .page { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 16px var(--gutter) 12px; overflow: hidden; }
 .page-settings { overflow-y: auto; }
+/* Short windows (small laptop screens, Linux with a taskbar): the tables and calendar keep a usable
+   height and the page scrolls, instead of squeezing them out of view. */
+.page-overview, .page-calendar { overflow-y: auto; }
+.page-overview > *, .page-calendar > * { flex-shrink: 0; }
+.page-overview > .logs { flex-shrink: 1; min-height: 220px; }
+.page-calendar > .calendar { flex-shrink: 1; min-height: 480px; }
 .page-title { font-family: var(--font-head); font-size: 22px; margin: 0; }
 
-/* Hero: castle artwork behind the header and navigation */
-.hero { position: relative; flex: none; background: var(--hero-bg); overflow: hidden; border-bottom: 1px solid var(--panel-border); }
+/* Hero: flowing waves behind the header and navigation */
+.hero { position: relative; flex: none; background: var(--hero-bg); overflow: hidden; }
+/* The waves blend into the page: gradients in the page color are painted over their left side (where
+   the title sits) and their bottom. (Done with layered gradients rather than mask-image, which the
+   Mac app's WebKit view didn't apply here.) */
 .hero-art {
-  position: absolute; top: 0; bottom: 0; left: calc(62% - 290px); width: 480px;
-  background: var(--hero-art) center bottom / cover no-repeat;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 22%, #000 78%, transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0%, #000 22%, #000 78%, transparent 100%);
-  pointer-events: none;
+  position: absolute; top: 0; bottom: 0; right: 0; left: clamp(160px, 18%, 360px); pointer-events: none;
+  /* Each stop is at least a fixed distance in, so narrow windows (where the waves scale with the header's
+     height, not its width) still get a long, gentle fade. */
+  --feather-x: linear-gradient(90deg, var(--bg) 0%, var(--bg) max(300px, 24%),
+    color-mix(in srgb, var(--bg) 55%, transparent) max(420px, 38%),
+    color-mix(in srgb, var(--bg) 15%, transparent) max(540px, 50%), transparent max(660px, 62%));
+  --feather-y: linear-gradient(0deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 70%, transparent) 22%, color-mix(in srgb, var(--bg) 25%, transparent) 45%, transparent 65%);
+  /* Pinned right: in narrow windows the art is wider than the header, so its left end (where the waves'
+     edges are) is cut off under the solid part of the fade. */
+  background: var(--feather-x), var(--feather-y), var(--hero-art) right center / cover no-repeat;
 }
 .header { position: relative; display: flex; align-items: center; gap: 14px; padding: 12px var(--gutter) 6px; color: var(--hero-text); }
 .header.mac-lights { padding-left: max(104px, var(--gutter)); } /* room for the macOS window buttons */
@@ -158,9 +172,21 @@ svg.lucide { width: 1em; height: 1em; stroke-width: 2.2; vertical-align: -0.125e
 .right-col { width: 480px; display: flex; flex-direction: column; gap: 14px; flex: none; }
 
 .wcard {
-  flex: 1; min-width: 0; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; align-items: center; gap: 10px;
-  background: color-mix(in srgb, var(--c) 10%, transparent); border: 1.5px solid color-mix(in srgb, var(--c) 85%, transparent);
+  flex: 1; min-width: 0; border-radius: 12px; padding: 14px 14px 26px; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  /* A wave in the card's color along the bottom, over a tint that deepens toward it. */
+  background:
+    var(--wave, none) center bottom / 100% 72px no-repeat,
+    linear-gradient(180deg, color-mix(in srgb, var(--c) 7%, transparent), color-mix(in srgb, var(--c) 20%, transparent));
+  border: 1.5px solid color-mix(in srgb, var(--c) 85%, transparent);
+  box-shadow: 0 6px 22px -10px color-mix(in srgb, var(--c) 55%, transparent);
 }
+.wcard.c-calm { --wave: url("vendor/waves/card-calm.svg"); }
+.wcard.c-green { --wave: url("vendor/waves/card-green.svg"); }
+.wcard.c-yellow { --wave: url("vendor/waves/card-yellow.svg"); }
+.wcard.c-orange { --wave: url("vendor/waves/card-orange.svg"); }
+.wcard.c-red { --wave: url("vendor/waves/card-red.svg"); }
+[data-theme="light"] .wcard.c-yellow { --wave: url("vendor/waves/card-yellow-light.svg"); }
+[data-theme="light"] .wcard.c-orange { --wave: url("vendor/waves/card-orange-light.svg"); }
 .wcard h3 { margin: 0; font-size: 17px; font-weight: 700; }
 .ring { position: relative; width: 112px; height: 112px; margin: 2px 0; }
 .ring svg { transform: rotate(-90deg); width: 100%; height: 100%; }
@@ -420,9 +446,13 @@ body.mobile input, body.mobile select, body.mobile textarea { font-size: 16px; }
 
 .m-header {
   position: relative; flex: none; overflow: hidden; background: var(--hero-bg);
-  padding-top: env(safe-area-inset-top); border-bottom: 1px solid var(--panel-border);
+  padding-top: env(safe-area-inset-top);
 }
-.m-header .hero-art { left: auto; right: -40px; width: 300px; }
+/* Phones: the waves sit close to the title, so they fade in more slowly. */
+.m-header .hero-art {
+  left: 30%; background-position: 0 0, 0 0, 22% center;
+  --feather-x: linear-gradient(90deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 70%, transparent) 30%, color-mix(in srgb, var(--bg) 25%, transparent) 60%, transparent 90%);
+}
 .m-head-row { position: relative; display: flex; align-items: center; gap: 10px; padding: 10px 14px; color: var(--hero-text); }
 .m-head-row .logo { height: 40px; }
 .m-title-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
@@ -1017,10 +1047,10 @@ body.mobile .sync-toast { bottom: calc(86px + env(safe-area-inset-bottom)); }
   background: var(--hero-bg); color: var(--hero-text); border-bottom: 1px solid var(--panel-border);
 }
 .wn-art {
-  position: absolute; top: 0; bottom: 0; right: -40px; width: 300px; pointer-events: none; opacity: 0.55;
-  background: var(--hero-art) center bottom / cover no-repeat;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 45%, #000 80%, transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0%, #000 45%, #000 80%, transparent 100%);
+  position: absolute; top: 0; bottom: 0; right: 0; left: 35%; pointer-events: none;
+  background:
+    linear-gradient(90deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 60%, transparent) 20%, transparent 50%),
+    var(--hero-art) left center / cover no-repeat;
 }
 .wn-hero > img { position: relative; width: 68px; height: 68px; flex: none; filter: drop-shadow(0 4px 14px rgba(47, 128, 255, 0.45)); }
 .wn-hero > div:not(.wn-art) { position: relative; min-width: 0; }
@@ -1107,3 +1137,210 @@ body.mobile .wn-body { padding: 14px 14px 4px; }
 .tour-skip { background: none; border: 0; padding: 4px 0; color: var(--text2); font-size: 13px; }
 .tour-skip:hover { color: var(--text); }
 .tour-actions .btn-primary, .tour-actions .btn-subtle { padding: 7px 14px; font-size: 13.5px; }
+
+/* ==========================================================================
+   Gloss: gradient buttons and glassy panels (to match the new header waves).
+   Kept in one place so the look can be tuned (or removed) without touching the layout above.
+   ========================================================================== */
+:root, [data-theme="dark"] {
+  --grad-primary: linear-gradient(120deg, #1fc8ff 0%, #2678fa 52%, #7b5cff 100%);
+  --grad-primary-hover: linear-gradient(120deg, #4fd6ff 0%, #3d88ff 52%, #8d72ff 100%);
+  --glow-primary: 0 6px 18px -6px rgba(38, 120, 250, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.015) 38%, rgba(255, 255, 255, 0) 60%);
+  --glass-btn: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03));
+  --glass-btn-hover: linear-gradient(180deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05));
+  --glass-edge: rgba(150, 190, 255, 0.2);
+  --panel-glass: color-mix(in srgb, var(--panel) 82%, transparent);
+  --panel-lift: 0 14px 34px -18px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+[data-theme="light"] {
+  --glow-primary: 0 6px 16px -6px rgba(38, 120, 250, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 55%);
+  --glass-btn: linear-gradient(180deg, #ffffff, #eef3fb);
+  --glass-btn-hover: linear-gradient(180deg, #ffffff, #e4ecf9);
+  --glass-edge: rgba(30, 60, 120, 0.14);
+  --panel-glass: rgba(255, 255, 255, 0.82);
+  --panel-lift: 0 10px 28px -16px rgba(20, 45, 95, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* Soft color in the page background, so the glass panels have something to sit on. */
+body {
+  background:
+    radial-gradient(1100px 620px at 100% 35%, color-mix(in srgb, #134dfa 14%, transparent), transparent 70%),
+    radial-gradient(900px 560px at 0% 100%, color-mix(in srgb, #6b04d5 10%, transparent), transparent 70%),
+    var(--bg);
+}
+
+/* Primary buttons and the selected tab: the header's cyan → blue → violet, with a soft glow. */
+.btn-primary, .nav button.on, .tabs button.on, .m-tabbar .m-plus {
+  background: var(--grad-primary); color: #fff; border: 0;
+  box-shadow: var(--glow-primary); text-shadow: 0 1px 1px rgba(0, 0, 20, 0.25);
+}
+.btn-primary:hover:not([disabled]), .nav button.on:hover { background: var(--grad-primary-hover); }
+.btn-primary:active { opacity: 1; filter: brightness(0.92); }
+.btn-primary[disabled] { filter: saturate(0.4) brightness(0.85); box-shadow: none; }
+/* Every button is a pill (icon-only buttons are circles), and every switch shows its selected option
+   with the same gradient, so the whole app is consistent. */
+.btn-primary, .btn-subtle, .tabs, .tabs button, .seg, .seg button, .datenav, .confirm-btn,
+.nav button, .nav button.on { border-radius: 999px; }
+.nav button { padding: 8px 20px; }
+.btn-subtle { padding-inline: 16px; }
+.btn-subtle.small { padding-inline: 12px; }
+.btn-subtle.square { padding: 7px; aspect-ratio: 1; justify-content: center; }
+.seg button.on {
+  background: var(--grad-primary); color: #fff; box-shadow: var(--glow-primary); text-shadow: 0 1px 1px rgba(0, 0, 20, 0.25);
+}
+.seg { background: color-mix(in srgb, var(--panel) 50%, transparent); border: 1px solid var(--glass-edge); padding: 3px; }
+
+/* Secondary buttons: glass inside a gradient outline (the primary gradient, softened), so they belong
+   with the primary buttons but stay quieter. The outline is the border-box layer showing through a
+   transparent border; the solid panel layer keeps it from showing through the glass. */
+:root, [data-theme="dark"] { --grad-edge: linear-gradient(120deg, rgba(31, 200, 255, 0.75), rgba(38, 120, 250, 0.55) 50%, rgba(123, 92, 255, 0.75)); }
+[data-theme="light"] { --grad-edge: linear-gradient(120deg, rgba(31, 170, 240, 0.8), rgba(38, 120, 250, 0.6) 50%, rgba(123, 92, 255, 0.8)); }
+.btn-subtle {
+  --btn-fill: var(--glass-btn);
+  border: 1px solid transparent; border-radius: 999px;
+  background: var(--btn-fill) padding-box, linear-gradient(var(--panel), var(--panel)) padding-box, var(--grad-edge) border-box;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 10px -6px rgba(38, 120, 250, 0.6);
+}
+.btn-subtle:hover { --btn-fill: var(--glass-btn-hover); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 3px 14px -6px rgba(38, 120, 250, 0.8); }
+.btn-subtle:active { --btn-fill: linear-gradient(rgba(var(--ink), 0.14), rgba(var(--ink), 0.14)); }
+.btn-subtle.active { --btn-fill: linear-gradient(color-mix(in srgb, var(--blue) 25%, transparent), color-mix(in srgb, var(--blue) 25%, transparent)); }
+.btn-subtle.btn-danger { --grad-edge: linear-gradient(120deg, color-mix(in srgb, var(--red) 80%, transparent), color-mix(in srgb, var(--red) 50%, transparent)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08); }
+
+/* The navigation and date picker sit in glass pills over the header. */
+.nav {
+  width: max-content; margin: 0 0 10px var(--gutter); padding: 4px; gap: 4px; border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 45%, transparent); border: 1px solid var(--glass-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.datenav {
+  background: var(--sheen), color-mix(in srgb, var(--panel) 55%, transparent); border-color: var(--glass-edge);
+  border-radius: 999px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.tabs { background: color-mix(in srgb, var(--panel) 50%, transparent); border-color: var(--glass-edge); border-radius: 999px; }
+
+/* Panels: frosted glass with a sheen along the top edge. */
+.panel {
+  background: var(--sheen), var(--panel-glass);
+  border: 1px solid var(--glass-edge); border-radius: 16px; box-shadow: var(--panel-lift);
+}
+
+/* Progress cards: a glossy highlight over the tint and wave. */
+.wcard {
+  background:
+    var(--sheen),
+    var(--wave, none) center bottom / 100% 72px no-repeat,
+    linear-gradient(180deg, color-mix(in srgb, var(--c) 7%, transparent), color-mix(in srgb, var(--c) 20%, transparent));
+  border-radius: 14px;
+  box-shadow: 0 8px 24px -12px color-mix(in srgb, var(--c) 60%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Progress bars: the same gradient as the buttons. */
+.bar > div { background: var(--grad-primary); box-shadow: 0 0 12px -2px rgba(31, 200, 255, 0.55); }
+
+/* ==========================================================================
+   One look everywhere: pop-ups, menus, fields, Calendar, Leaves and the phone layout use the same
+   glass surfaces, sheen, gradient accents and rounded shapes as the Home page.
+   ========================================================================== */
+:root, [data-theme="dark"] {
+  --pop-glass: color-mix(in srgb, var(--popover) 90%, transparent);
+  --pop-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --field-bg: rgba(255, 255, 255, 0.05);
+  --tile-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 55%);
+}
+[data-theme="light"] {
+  --pop-glass: rgba(255, 255, 255, 0.92);
+  --pop-shadow: 0 24px 60px -16px rgba(20, 45, 95, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --field-bg: rgba(255, 255, 255, 0.85);
+  --tile-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 55%);
+}
+
+/* Pop-ups: frosted glass with a thin gradient strip along the top, over a softly blurred page. */
+.scrim.dim { background: rgba(2, 8, 20, 0.45); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+[data-theme="light"] .scrim.dim { background: rgba(20, 35, 70, 0.22); }
+.dialog, .popover, .sheet, .update-notice, .tour-card {
+  background: var(--grad-primary) top / 100% 3px no-repeat, var(--sheen), var(--pop-glass);
+  border: 1px solid var(--glass-edge); box-shadow: var(--pop-shadow);
+  backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+.dialog { border-radius: 20px; }
+.popover, .update-notice, .tour-card { border-radius: 16px; }
+.sheet { border-radius: 22px 22px 0 0; }
+.dialog-actions { border-top-color: var(--glass-edge); }
+.popover .actions, .sheet .actions { border-top-color: var(--glass-edge); }
+.sync-toast { background: var(--sheen), var(--pop-glass); box-shadow: var(--pop-shadow); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.viewer { border-radius: 20px; border-color: var(--glass-edge); }
+.viewer-head { background: var(--sheen), var(--panel-glass); border-bottom-color: var(--glass-edge); }
+.tour-spot { border-radius: 16px !important; }
+
+/* Menus: rounded glass, with the button gradient on the item under the pointer. */
+.menu button { border-radius: 10px; padding: 7px 10px; }
+.menu button:hover { background: var(--grad-primary); color: #fff; }
+.menu hr { border-top-color: var(--glass-edge); }
+.sheet-item { border-radius: 16px; background: var(--glass-btn); border-color: var(--glass-edge); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+
+/* Fields: soft glass with a blue focus glow. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), select, textarea {
+  background-color: var(--field-bg); border: 1px solid var(--glass-edge); border-radius: 10px; padding: 6px 10px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:focus {
+  outline: none; border-color: color-mix(in srgb, var(--blue) 80%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 28%, transparent);
+}
+input[type="checkbox"], input[type="radio"] { accent-color: var(--blue); }
+.leave-search { border-radius: 999px; background: var(--field-bg); border-color: var(--glass-edge); }
+.leave-search:focus-within { border-color: color-mix(in srgb, var(--blue) 80%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 28%, transparent); }
+.leave-search input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+.leave-search input:not([type="checkbox"]):not([type="radio"]):focus { background: none; border: 0; box-shadow: none; padding: 0; border-radius: 0; }
+
+/* Grouped rows (Settings and the editors) and other inner boxes. */
+.group { background: var(--tile-sheen), rgba(var(--ink), 0.035); border-color: var(--glass-edge); border-radius: 14px; }
+.group > .field + .field { border-top-color: var(--glass-edge); }
+.rep-inner, .banner { border-radius: 14px; background-image: var(--tile-sheen); }
+.wn-card { border-radius: 14px; background-image: var(--tile-sheen); }
+.ld-notes { border-radius: 14px; border-color: var(--glass-edge); }
+.leave-empty { border-radius: 16px; border-color: var(--glass-edge); background: var(--tile-sheen), rgba(var(--ink), 0.03); }
+.att-open img, .att-pdf { border-radius: 10px; }
+.chip, .cal-pill, .m-chip { border-radius: 999px; }
+
+/* Calendar: glass day cells; today in the button gradient's blue. */
+.cal-cell { border-radius: 14px; background: var(--tile-sheen), rgba(var(--ink), 0.035); border-color: var(--glass-edge); }
+.cal-cell.weekend { background: var(--tile-sheen), rgba(var(--ink), 0.02); }
+.cal-cell.has { background: var(--tile-sheen), color-mix(in srgb, var(--blue) 9%, transparent); }
+.cal-cell.today { box-shadow: 0 0 14px -4px color-mix(in srgb, var(--blue) 70%, transparent); }
+.m-cal-cell { border-radius: 12px; }
+.m-cal-cell.sel { background: var(--grad-primary); box-shadow: var(--glow-primary); }
+
+/* Leaves: tiles and cards get the panel glass and gloss. */
+.ld-tile {
+  background: var(--sheen), var(--panel-glass); border-color: var(--glass-edge); border-radius: 16px; box-shadow: var(--panel-lift);
+}
+.ld-tile-icon { border-radius: 12px; }
+.leave-card { border-radius: 18px; box-shadow: 0 14px 30px -16px color-mix(in srgb, var(--c) 70%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
+.leave-card::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0) 45%);
+}
+.lc-arrow { background: var(--sheen), var(--pop-glass); border-color: var(--glass-edge); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+
+/* Phone layout: rows, calendar and header buttons match the desktop glass. */
+.m-row, .m-cal { background: var(--sheen), var(--panel-glass); border-color: var(--glass-edge); border-radius: 16px; box-shadow: var(--panel-lift); }
+.m-date, .m-iconbtn { border-radius: 999px; background: var(--sheen), color-mix(in srgb, var(--panel) 55%, transparent); border-color: var(--glass-edge); }
+.m-iconbtn.on { background: var(--grad-primary); border-color: transparent; box-shadow: var(--glow-primary); }
+.m-tabbar { background: color-mix(in srgb, var(--panel) 72%, transparent); border-top-color: var(--glass-edge); backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%); }
+
+/* Calendar leave bars: pill ends and a gloss, in the leave type's color. */
+.cal-leave {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 65%), color-mix(in srgb, var(--c) 34%, var(--panel));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+.cal-leave.start { border-top-left-radius: 999px; border-bottom-left-radius: 999px; padding-left: 9px; }
+.cal-leave.end { border-top-right-radius: 999px; border-bottom-right-radius: 999px; }
+.m-cal-leave { background: color-mix(in srgb, var(--amber) 85%, white); }
+.m-cal-leave.start { border-top-left-radius: 999px; border-bottom-left-radius: 999px; }
+.m-cal-leave.end { border-top-right-radius: 999px; border-bottom-right-radius: 999px; }
+.btn-amber { border-radius: 999px; box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--amber) 80%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.35); }
