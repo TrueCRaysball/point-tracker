@@ -320,7 +320,14 @@ svg.lucide-cross { fill: currentColor; }
 
 /* Settings page */
 .settings { display: flex; flex-direction: column; gap: 14px; max-width: 1100px; }
-.settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 14px; align-items: start; }
+.settings-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; align-items: start; }
+.set-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.set-col-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 2px 2px 0; min-height: 44px; }
+.set-col-head h2 { margin: 0 0 2px; font: 700 17px var(--font-head); }
+.set-col-head .muted { font-size: 12.5px; }
+.settings .group > .field > span:first-child > small { display: block; font-size: 12px; margin-top: 2px; }
+.settings .set-path { padding-top: 8px; user-select: text; overflow-wrap: anywhere; }
+@media (max-width: 900px) { .settings-cols { grid-template-columns: minmax(0, 1fr); } }
 .settings .group { background: var(--panel); box-shadow: var(--shadow); border-color: var(--panel-border); }
 
 /* Compact mode for shorter windows: shrink the top section so the tables keep their room. */
@@ -507,7 +514,7 @@ body.mobile .dots { gap: 8px; }
 .m-cal-items .cal-pill { font-size: 15px; padding: 10px 12px; border-radius: 10px; }
 
 /* Settings on a phone: single column */
-body.mobile .settings-grid { grid-template-columns: minmax(0, 1fr); }
+body.mobile .settings-cols { grid-template-columns: minmax(0, 1fr); gap: 14px; }
 body.mobile .settings { max-width: none; }
 body.mobile .group > .field { flex-wrap: wrap; }
 .m-phone-group { background: var(--panel); }
@@ -848,6 +855,7 @@ body.mobile .leave-empty { flex-direction: column; text-align: center; }
 .tl-labels > div { position: static; transform: none; white-space: normal; }
 .tl-labels > div.mid { transform: none; text-align: center; align-items: center; }
 .tl-labels > div.end { transform: none; text-align: right; align-items: flex-end; }
+.tl-labels > div.end:nth-child(2) { grid-column: 3; } /* no middle label (non-medical leaves) */
 body.mobile .tl-labels { height: auto; }
 /* Leave tiles: scale the big values with the window so dates never get cut off. */
 .ld-tile-value { font-size: clamp(15px, 1.3vw, 22px); }
@@ -1013,6 +1021,16 @@ body.mobile .sync-toast { bottom: calc(86px + env(safe-area-inset-bottom)); }
 .wn-hero h2 { margin: 2px 0 2px; font: 700 24px/1.15 var(--font-head); letter-spacing: -0.01em; }
 .wn-sub { color: var(--hero-sub); font-size: 13.5px; }
 .wn-body { padding: 18px 20px 6px; display: flex; flex-direction: column; gap: 12px; }
+.wn-x {
+  position: absolute; top: 10px; right: 10px; z-index: 1; display: grid; place-items: center; width: 30px; height: 30px; padding: 0;
+  border: 0; border-radius: 8px; background: rgba(0, 0, 0, 0.28); color: var(--hero-text); cursor: pointer;
+}
+.wn-x:hover { background: rgba(0, 0, 0, 0.45); }
+.wn-x svg { width: 18px; height: 18px; }
+/* Desktop: the header (with its close button) and Continue stay put; only the notes scroll. */
+body:not(.mobile) .dialog:has(.whatsnew:not(.welcome)) { display: flex; flex-direction: column; overflow: hidden; }
+body:not(.mobile) .whatsnew:not(.welcome) { flex: 1 1 auto; min-height: 0; }
+body:not(.mobile) .whatsnew:not(.welcome) .wn-body { overflow-y: auto; }
 .wn-ver { margin: 6px 0 -2px; font: 700 12px var(--font-head); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text2); }
 .wn-ver:first-child { margin-top: 0; }
 .wn-cards { display: flex; flex-direction: column; gap: 10px; }

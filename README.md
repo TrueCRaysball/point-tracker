@@ -16,7 +16,7 @@
 - **Call-ins:** Call In Sick, Call In Personal, Worked / Returned, ADO, Picked Up Shift, Dropped Shift, or Other (your own label). Each entry can hold the shift you called out of, when you submitted it to CastLife, a note and attachments. Points follow the rules, and you can override them.
 - **Sick-call occurrences:** consecutive sick call-ins count as one point. The app tracks each occurrence and flags when one reaches the medical-leave limit.
 - **Reprimands:** record reprimands when you sign them and choose which points each one uses (or let **Select points in window** pick them). A banner tells you when you've earned one, and the app tracks how many are in effect and when they expire together.
-- **Medical leaves:** a page for each leave with its details (type, status, claim number, care provider, expected return), a timeline, notes, upcoming dates and reminders, and all its documents. Close it out with **Return to Work**, and search past leaves any time.
+- **Leaves:** medical leaves and any other kind (personal leave of absence, parental, bereavement, military, jury duty). Each gets a page with its details (type, status, claim number, care provider for medical leaves, expected return), a timeline, notes, upcoming dates and reminders, and all its documents. Close it out with **Return to Work**, and search past leaves any time.
 - **Reminders to double-check:**
   - a notice to confirm in CastLife when a point drops off
   - a notice to confirm with leadership when reprimands expire

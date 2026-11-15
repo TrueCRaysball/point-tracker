@@ -359,7 +359,7 @@ function showWelcome() {
         <div class="wn-art"></div>
         <img src="vendor/${env.demo ? "app-icon-demo" : "app-icon"}.png" alt="" draggable="false">
         <div><div class="wn-kicker">${icon("hand")} Welcome</div><h2>${env.demo ? "Point Tracker Demo" : "Point Tracker"}</h2>
-          <div class="wn-sub">${env.demo ? "This demo is filled with sample data, so explore freely." : "Track your attendance points, reprimands and medical leave in one place."}</div></div>
+          <div class="wn-sub">${env.demo ? "This demo is filled with sample data, so explore freely." : "Track your attendance points, reprimands and leaves in one place."}</div></div>
       </div>
       <div class="wn-body">
         <button class="wl-option c-blue" data-action="intro-tour"><span class="wn-icon">${icon("map")}</span>
@@ -385,7 +385,7 @@ function tourSteps() {
       { target: q(".m-plus"), title: "Log a call-in", text: "Tap <b>+</b> to add a call-in, a shift you picked up or worked, or a reprimand. Points are worked out for you." },
       { target: tab("callins"), title: "Call-ins", text: "Every call-in you've logged, with its points and which sick occurrence it belongs to." },
       { target: tab("reprimands"), title: "Reprimands", text: "Reprimands you've signed, when each one expires, and how close you are to termination." },
-      { target: tab("calendar"), title: "Calendar", text: "A month view of your call-ins, reprimands and medical leave." },
+      { target: tab("calendar"), title: "Calendar", text: "A month view of your call-ins, reprimands and leaves." },
       { target: q(".m-date"), title: "Look ahead or back", text: "Pick any date to see where you'll stand then. Handy for checking when points drop off." },
       { target: q('.m-iconbtn[data-page="settings"]'), title: "Settings", text: "Adjust thresholds and point values, back up your data, and turn on <b>Nearby Sync</b> to keep your phone and computer in step." },
       done,
@@ -400,8 +400,8 @@ function tourSteps() {
     { target: q(".panel.log"), title: "Call-ins and reprimands", text: "Everything you've logged. Click a row for details, or double-click to edit it." },
     { target: q('[data-action="add-entry"]'), title: "Add Entry", text: "Log a call-in, a shift you picked up or worked, or another change. Points are worked out for you." },
     { target: q(".datenav"), title: "Look ahead or back", text: "Change the date to see where you'll stand on any day. Handy for checking when points drop off." },
-    { target: nav("calendar"), title: "Calendar", text: "A month view of your call-ins, reprimands and medical leave." },
-    { target: nav("leaves"), title: "Medical Leaves", text: "Keep each leave's details, timeline, notes, upcoming dates and documents together." },
+    { target: nav("calendar"), title: "Calendar", text: "A month view of your call-ins, reprimands and leaves." },
+    { target: nav("leaves"), title: "Leaves", text: "Medical, personal, parental, bereavement or any other leave: keep each one's details, timeline, notes, upcoming dates and documents together." },
     { target: nav("settings"), title: "Settings", text: "Adjust thresholds and point values, back up your data, and turn on <b>Nearby Sync</b> to keep your phone and computer in step." },
     done,
   ];
@@ -443,6 +443,7 @@ async function showWhatsNew(notes, version, { markSeen = false } = {}) {
     <div class="whatsnew">
       <div class="wn-hero">
         <div class="wn-art"></div>
+        <button class="wn-x" data-action="close" aria-label="Close" title="Close">${icon("x")}</button>
         <img src="vendor/${env.demo ? "app-icon-demo" : "app-icon"}.png" alt="" draggable="false">
         <div><div class="wn-kicker">${icon("sparkles")} What's New</div><h2>Point Tracker ${esc(W.versionName(version))}</h2>
           <div class="wn-sub">Here's what's new since you last opened the app.</div></div>
@@ -813,6 +814,27 @@ const uuid = () => crypto.randomUUID().toUpperCase();
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const icon = (name) => `<i data-lucide="${name}"></i>`;
+
+// Point Tracker's own icons, drawn on Lucide's 24×24 grid so they match the rest. Use them like any
+// other: icon("pt-leave").
+const OWN_ICONS = {
+  // Leaves: a person in front of a clock (time away). Adapted from "Minimal Person and Clock Icon".
+  PtLeave: [
+    ["path", { d: "M16.24 7.56A7.5 7.5 0 1 0 9.65 16.97" }],
+    ["path", { d: "M9 4.5v1" }],
+    ["path", { d: "M3.5 9.5h1" }],
+    ["path", { d: "M9 13.5v1" }],
+    ["path", { d: "M8 10.5l4.5-4.5" }],
+    ["circle", { cx: "17", cy: "13", r: "2.75" }],
+    ["path", { d: "M12 22v-.5a3.5 3.5 0 0 1 3.5-3.5h3a3.5 3.5 0 0 1 3.5 3.5v.5z" }],
+  ],
+};
+{
+  const base = lucide.icons.House[1]; // Lucide's standard <svg> attributes
+  const all = { ...lucide.icons, ...Object.fromEntries(Object.entries(OWN_ICONS).map(([k, kids]) => [k, ["svg", base, kids]])) };
+  const createIcons = lucide.createIcons;
+  lucide.createIcons = (opts = {}) => createIcons({ ...opts, icons: opts.icons ?? all });
+}
 const TYPE_ICON = {
   callSick: "cross", callPersonal: "user", worked: "briefcase", ado: "sun",
   pickedUp: "circle-plus", dropped: "circle-minus", other: "circle-ellipsis",
@@ -953,7 +975,7 @@ function expandedTable(ev) {
 
 function hero() {
   const over = ui.asOverride !== null;
-  const nav = [["overview", "house", "Overview"], ["calendar", "calendar-days", "Calendar"], ["leaves", "heart-pulse", "Medical Leaves"], ["settings", "settings", "Settings"]];
+  const nav = [["overview", "house", "Home"], ["calendar", "calendar-days", "Calendar"], ["leaves", "pt-leave", "Leaves"], ["settings", "settings", "Settings"]];
   return `
   <div class="hero" data-tauri-drag-region>
     <div class="hero-art" data-tauri-drag-region></div>
@@ -1086,9 +1108,30 @@ function reprimandExpire(ev) {
   </div>`;
 }
 
-// ---------- Medical leave ----------
+// ---------- Leaves ----------
 
-const LEAVE_TYPES = ["Personal Medical Leave", "FMLA", "Workers' Comp", "Short-Term Disability", "Other"];
+/** Leave types that carry medical details (diagnosis, care provider, category, protected points). */
+const MEDICAL_LEAVE_TYPES = ["Personal Medical Leave", "FMLA", "Workers' Comp", "Short-Term Disability"];
+/** Other leave types → [icon, color] for their cards. "Other" keeps every field, medical ones included. */
+const OTHER_LEAVE_TYPES = {
+  "Personal Leave of Absence": ["user-round", "blue"],
+  "Parental Leave": ["baby", "teal"],
+  "Bereavement": ["flower-2", "purple"],
+  "Military Leave": ["shield", "green"],
+  "Jury Duty": ["scale", "amber"],
+  "Other": ["calendar-off", "orange"],
+};
+const LEAVE_TYPES = [...MEDICAL_LEAVE_TYPES, ...Object.keys(OTHER_LEAVE_TYPES)];
+/** Whether a leave shows the medical fields. */
+const isMedicalLeave = (l) => MEDICAL_LEAVE_TYPES.includes(l.leaveType) || l.leaveType === "Other" || !LEAVE_TYPES.includes(l.leaveType);
+/** [icon, color] for a leave's card and header. */
+function leaveLook(l) {
+  if (OTHER_LEAVE_TYPES[l.leaveType] && (l.leaveType !== "Other" || !l.category || l.category === "other")) return OTHER_LEAVE_TYPES[l.leaveType];
+  const [, ic, color] = LEAVE_CATEGORIES[l.category] ?? LEAVE_CATEGORIES.other;
+  return [ic, color];
+}
+/** How a leave is named in banners and the calendar: "Medical leave", "Bereavement"… */
+const leaveLabel = (l) => (MEDICAL_LEAVE_TYPES.includes(l.leaveType) || !LEAVE_TYPES.includes(l.leaveType) ? "Medical leave" : l.leaveType === "Other" ? "Leave" : l.leaveType);
 const LEAVE_STATUSES = ["Pending", "Approved", "Active", "Denied", "Closed"];
 const DOC_TYPES = ["Doctor's Note", "HR Form", "Test Result", "Care Plan", "Appointment", "Return to Work", "Other"];
 /** Category → [label, icon, color]. Sets each leave card's look. */
@@ -1176,20 +1219,20 @@ function leaveBanners(ev) {
   }
   for (const l of data.leaves.filter((l) => onLeaveNow(l, ev.asOf))) {
     const day = leaveDaysCount(l, ev.asOf), docs = l.attachments?.length ?? 0;
-    out.push(`<div class="banner c-amber">${icon("hospital")}<span><b>On medical leave</b> since ${Day.long(Day.parse(l.startDate))} · day ${day}${docs ? ` · ${docs} document${docs === 1 ? "" : "s"}` : ""}</span>
+    out.push(`<div class="banner c-amber">${icon(leaveLook(l)[0])}<span><b>On ${isMedicalLeave(l) && leaveLabel(l) === "Medical leave" ? "medical leave" : `leave (${esc(l.leaveType)})`}</b> since ${Day.long(Day.parse(l.startDate))} · day ${day}${docs ? ` · ${docs} document${docs === 1 ? "" : "s"}` : ""}</span>
       <span class="spacer"></span><span class="banner-actions">
-      <button class="btn-subtle" data-action="leave-edit" data-id="${l.id}">${icon("heart-pulse")} View Leave</button>
+      <button class="btn-subtle" data-action="leave-edit" data-id="${l.id}">${icon("eye")} View Leave</button>
       <button class="btn-primary small" data-action="leave-return" data-id="${l.id}">${icon("briefcase")} Return to Work</button></span></div>`);
   }
   return out;
 }
 
-// ----- Medical Leaves page -----
+// ----- Leaves page -----
 
 function leavesPage(ev) {
   const cur = currentLeave(ev.asOf);
   const view = ui.leaveView;
-  const back = isMobile() ? `<button class="m-back" data-action="m-page" data-page="overview">${icon("chevron-left")} Overview</button>` : "";
+  const back = isMobile() ? `<button class="m-back" data-action="m-page" data-page="overview">${icon("chevron-left")} Home</button>` : "";
   if (view && view !== "history") {
     const l = data.leaves.find((x) => x.id === view);
     if (l) return back + leaveDetail(l, ev, l === cur);
@@ -1207,20 +1250,20 @@ function leavesOverview(ev, cur) {
   return `
   <div class="panel leaves-overview">
     <div class="ld-head">
-      <span class="ld-heart">${icon("heart-pulse")}</span>
-      <div class="ld-head-text"><h2 class="page-title">Medical Leaves</h2>
-        <div class="muted">Track your medical leaves. This is your personal copy. You must still file all requests, documentation, and communications through DToolsHR.</div></div>
+      <span class="ld-heart">${icon("pt-leave")}</span>
+      <div class="ld-head-text"><h2 class="page-title">Leaves</h2>
+        <div class="muted">Track any leave: medical, personal, parental, bereavement, military and more. This is your personal copy. You must still file all requests, documentation, and communications through DToolsHR.</div></div>
       <span class="spacer"></span>
       ${cur ? `<button class="btn-subtle" data-action="leave-edit" data-id="${cur.id}">${icon("arrow-left")} Back to Current Leave</button>` : ""}
-      <button class="btn-primary" data-action="leave-new">${icon("plus")} Report a New Medical Leave</button>
+      <button class="btn-primary" data-action="leave-new">${icon("plus")} Report a New Leave</button>
     </div>
     ${cur ? "" : `
     <div class="leave-empty">${icon("folder-plus")}
-      <div><b class="head">You do not have an active medical leave.</b>
-        <div class="muted">Use the button above to report a new medical leave and start tracking it here.</div></div></div>`}
+      <div><b class="head">You're not on leave right now.</b>
+        <div class="muted">Use the button above to report a new leave and start tracking it here.</div></div></div>`}
     <div class="ld-section-head">
       <span class="pi blue">${icon("history")}</span>
-      <div><div class="panel-title">Previous Medical Leaves</div><div class="muted">Click a leave below to view full details, documentation, and notes.</div></div>
+      <div><div class="panel-title">Previous Leaves</div><div class="muted">Click a leave below to view full details, documentation, and notes.</div></div>
       <span class="spacer"></span>
       <label class="leave-search">${icon("search")}<input type="search" data-leave-search placeholder="Search past leaves…" value="${esc(ui.leaveSearch ?? "")}"></label>
       <select data-leave-sort><option value="new" ${ui.leaveSort !== "old" ? "selected" : ""}>Newest First</option><option value="old" ${ui.leaveSort === "old" ? "selected" : ""}>Oldest First</option></select>
@@ -1232,12 +1275,12 @@ function leavesOverview(ev, cur) {
       <button class="lc-arrow next" data-action="lc-scroll" data-dir="1" aria-label="Next">${icon("chevron-right")}</button>
     </div>
     <div class="m-dots lc-dots">${past.map((_, i) => `<span class="${i === 0 ? "on" : ""}"></span>`).join("")}</div>`
-    : `<div class="m-empty">${q ? "No past leaves match your search." : "No previous medical leaves yet."}</div>`}
+    : `<div class="m-empty">${q ? "No past leaves match your search." : "No previous leaves yet."}</div>`}
   </div>`;
 }
 
 function leaveCard(l, ev) {
-  const [, ic, color] = LEAVE_CATEGORIES[l.category] ?? LEAVE_CATEGORIES.other;
+  const [ic, color] = leaveLook(l);
   const end = leaveEnd(l);
   return `
   <button class="leave-card c-${color}" data-action="leave-edit" data-id="${l.id}">
@@ -1254,6 +1297,8 @@ function leaveDetail(l, ev, isCurrent) {
   const S = Day.parse(l.startDate), T = Day.parse(l.triggerDate || l.startDate);
   const R = l.returnDate ? Day.parse(l.returnDate) : null, X = l.expectedReturn ? Day.parse(l.expectedReturn) : null;
   const days = leaveDaysCount(l, ev.asOf);
+  const medical = isMedicalLeave(l);
+  const [lookIcon, lookColor] = leaveLook(l);
   const chip = isCurrent ? ["Active", "st-Active"] : [l.status, `st-${l.status}`];
   const tile = (ic, color, label, value, sub, num = false) => `
     <div class="ld-tile"><div class="ld-tile-in"><span class="ld-tile-icon c-${color}">${icon(ic)}</span>
@@ -1269,8 +1314,8 @@ function leaveDetail(l, ev, isCurrent) {
     : X ? tile("calendar-check", "teal", "Expected Return", Day.short(X), `${X - S} total days (est.)`)
     : tile("calendar-check", "teal", "Expected Return", "Not set", "Add it in Edit Details");
 
-  // Timeline: start → trigger → return (or expected return).
-  const E2 = R ?? X ?? Math.max(ev.asOf, T) + 7;
+  // Timeline: start → trigger (medical leaves) → return (or expected return).
+  const E2 = R ?? X ?? Math.max(ev.asOf, medical ? T : S) + 7;
   const span = Math.max(1, E2 - S);
   const pos = (d) => Math.max(0, Math.min(100, ((d - S) / span) * 100));
   const now = Math.min(ev.asOf, E2);
@@ -1278,16 +1323,16 @@ function leaveDetail(l, ev, isCurrent) {
     <div class="panel ld-timeline">
       <div class="tl-track">
         <div class="tl-dash"></div>
-        <div class="tl-fill blue" style="left:0;width:${pos(Math.min(now, T))}%"></div>
-        ${now > T ? `<div class="tl-fill amber" style="left:${pos(T)}%;width:${pos(now) - pos(T)}%"></div>` : ""}
+        <div class="tl-fill blue" style="left:0;width:${pos(medical ? Math.min(now, T) : now)}%"></div>
+        ${medical && now > T ? `<div class="tl-fill amber" style="left:${pos(T)}%;width:${pos(now) - pos(T)}%"></div>` : ""}
         <span class="tl-dot blue" style="left:0"></span>
-        <span class="tl-dot amber" style="left:${pos(T)}%"></span>
+        ${medical ? `<span class="tl-dot amber" style="left:${pos(T)}%"></span>` : ""}
         <span class="tl-dot end ${R ? "done" : ""}" style="left:100%"></span>
         ${ev.asOf > S && ev.asOf < E2 ? `<span class="tl-now" style="left:${pos(ev.asOf)}%" title="${Day.short(ev.asOf)}"></span>` : ""}
       </div>
       <div class="tl-labels">
         <div style="left:0"><b>${Day.short(S)}</b><span>Start of Leave</span></div>
-        <div style="left:${pos(T)}%" class="mid amber"><b>${Day.short(T)}</b><span>Points Protected<br>(Day ${T - S + 1})</span></div>
+        ${medical ? `<div style="left:${pos(T)}%" class="mid amber"><b>${Day.short(T)}</b><span>Points Protected<br>(Day ${T - S + 1})</span></div>` : ""}
         <div style="left:100%" class="end"><b>${R || X ? Day.short(E2) : "—"}</b><span>${R ? "Returned" : "Expected Return"}${R || X ? `<br>(Day ${E2 - S + 1})` : ""}</span></div>
       </div>
     </div>`;
@@ -1305,7 +1350,7 @@ function leaveDetail(l, ev, isCurrent) {
   }).join("");
 
   const upcoming = [
-    ...(T >= ev.asOf ? [{ ic: "hourglass", color: "amber", label: "Points Protected (Trigger Date)", date: T }] : []),
+    ...(medical && T >= ev.asOf ? [{ ic: "hourglass", color: "amber", label: "Points Protected (Trigger Date)", date: T }] : []),
     ...(!R && X && X >= ev.asOf ? [{ ic: "calendar-check", color: "teal", label: "Expected Return to Work", date: X }] : []),
     ...(l.reminders ?? []).filter((r) => Day.parse(r.date) >= ev.asOf)
       .map((r) => ({ ic: "bell", color: "blue", label: r.label, date: Day.parse(r.date), id: r.id })),
@@ -1316,9 +1361,9 @@ function leaveDetail(l, ev, isCurrent) {
   <div class="leave-grid">
     <div class="leave-main">
       <div class="panel ld-head">
-        <span class="ld-heart">${icon("heart-pulse")}</span>
+        <span class="ld-heart">${icon(lookIcon)}</span>
         <div class="ld-head-text">
-          <div class="ld-title-row"><h2 class="page-title">${isCurrent ? "Current Medical Leave" : "Medical Leave"}</h2><span class="ld-chip ${chip[1]}">${esc(chip[0])}</span></div>
+          <div class="ld-title-row"><h2 class="page-title">${isCurrent ? "Current Leave" : "Leave"}</h2><span class="ld-chip ${chip[1]}">${esc(chip[0])}</span></div>
           <div class="muted">${esc(l.leaveType)}${l.diagnosis ? ` • ${esc(l.diagnosis)}` : ""}</div>
         </div>
         <span class="spacer"></span>
@@ -1327,9 +1372,9 @@ function leaveDetail(l, ev, isCurrent) {
       </div>
       <div class="ld-stats">
         ${tile("calendar", "blue", "Start Date", Day.short(S), "First day of leave")}
-        ${tile("shield", "amber", "Trigger Date", Day.short(T), "First day points are protected")}
+        ${medical ? tile("shield", "amber", "Trigger Date", Day.short(T), "First day points are protected") : ""}
         ${tile("clock", "blue", "Days on Leave", days, R ? "Total" : `As of ${Day.short(ev.asOf)}`, true)}
-        ${protectedTile}
+        ${medical ? protectedTile : ""}
         ${returnTile}
       </div>
       ${timeline}
@@ -1337,10 +1382,10 @@ function leaveDetail(l, ev, isCurrent) {
         <div class="panel ld-panel">
           <div class="ld-panel-head"><span class="pi blue">${icon("file-text")}</span><span class="panel-title">Leave Details</span><span class="spacer"></span>
             <button class="btn-subtle small" data-action="leave-details" data-id="${l.id}">${icon("pencil")} Edit Details</button></div>
-          ${detailRow("hospital", "Leave Type", esc(l.leaveType))}
-          ${detailRow("stethoscope", "Reason / Diagnosis", esc(l.diagnosis) || "—")}
-          ${detailRow("heart-pulse", "Category", esc(LEAVE_CATEGORIES[l.category]?.[0] ?? "Other"))}
-          ${detailRow("hospital", "Care Provider", esc(l.provider) || "—")}
+          ${detailRow(lookIcon, "Leave Type", esc(l.leaveType))}
+          ${detailRow(medical ? "stethoscope" : "message-square-text", medical ? "Reason / Diagnosis" : "Reason", esc(l.diagnosis) || "—")}
+          ${medical ? detailRow("heart-pulse", "Category", esc(LEAVE_CATEGORIES[l.category]?.[0] ?? "Other")) : ""}
+          ${medical ? detailRow("hospital", "Care Provider", esc(l.provider) || "—") : ""}
           ${detailRow("hash", "Claim / Case Number", esc(l.caseNumber) || "—")}
           ${detailRow("calendar-check", R ? "Returned" : "Expected Return", R ? `${Day.short(R)}${l.returnShiftStart ? ` at ${fmtTime(l.returnShiftStart)}` : ""}` : X ? Day.short(X) : "—")}
           ${detailRow("circle-check", "Status", `<span class="status-dot st-${esc(l.status)}"></span>${esc(l.status)}`)}
@@ -1358,7 +1403,7 @@ function leaveDetail(l, ev, isCurrent) {
         <div class="ld-panel-head"><span class="pi blue">${icon("file-text")}</span><span class="panel-title">Documents</span><span class="spacer"></span>
           <button class="btn-primary small" data-action="doc-upload" data-id="${l.id}">${icon("plus")} Upload Document</button></div>
         ${docs ? `<div class="doc-row doc-head muted"><span>File Name</span><span>Type</span><span>Uploaded</span><span>Actions</span></div>${docs}`
-          : `<div class="m-empty small">No documents yet. Upload doctor's notes, HR forms, test results — any file type.</div>`}
+          : `<div class="m-empty small">No documents yet. Upload ${medical ? "doctor's notes, HR forms, test results" : "HR forms, letters, notices"} — any file type.</div>`}
       </div>
       <div class="panel ld-panel">
         <div class="ld-panel-head"><span class="pi blue">${icon("calendar-clock")}</span><span class="panel-title">Upcoming Dates</span><span class="spacer"></span>
@@ -1371,7 +1416,7 @@ function leaveDetail(l, ev, isCurrent) {
       <div class="panel ld-important">
         <div class="ld-panel-head"><span class="amber-text">${icon("circle-alert")}</span><b class="head amber-text">Important Reminder</b><span class="spacer"></span>
           <a class="btn-amber" href="${DTOOLSHR_URL}" data-external>${icon("external-link")} Open DToolsHR</a></div>
-        <div>This tool does not file, submit, or communicate with DToolsHR. You must submit all medical leave requests, documentation, and updates through DToolsHR. This is only a personal tracking tool to help you manage your leave information.</div>
+        <div>This tool does not file, submit, or communicate with DToolsHR. You must submit all leave requests, documentation, and updates through DToolsHR. This is only a personal tracking tool to help you manage your leave information.</div>
       </div>
     </div>
   </div>`;
@@ -1403,20 +1448,24 @@ function openLeaveDetails(leave, isNew = false) {
   overlay = { kind: "leaveDetails", draft: structuredClone(leave), isNew };
   const l = overlay.draft;
   const opts = (list, cur) => list.map((v) => `<option ${v === cur ? "selected" : ""}>${esc(v)}</option>`).join("");
+  const medical = isMedicalLeave(l);
+  const types = [...(LEAVE_TYPES.includes(l.leaveType) ? [] : [l.leaveType])];
   showDialog(`
     <div class="form">
-      <h2>${isNew ? "Report a New Medical Leave" : "Edit Leave Details"}</h2>
+      <h2>${isNew ? "Report a New Leave" : "Edit Leave Details"}</h2>
       <div class="group">
-        <div class="field"><span>Leave Type</span><select data-ld="leaveType">${opts(LEAVE_TYPES, l.leaveType)}</select></div>
+        <div class="field"><span>Leave Type</span><select data-ld="leaveType">${opts(types, l.leaveType)}
+          <optgroup label="Medical">${opts(MEDICAL_LEAVE_TYPES, l.leaveType)}</optgroup>
+          <optgroup label="Other leaves">${opts(Object.keys(OTHER_LEAVE_TYPES), l.leaveType)}</optgroup></select></div>
         <div class="field"><span>Status</span><select data-ld="status">${opts(LEAVE_STATUSES, l.status)}</select></div>
-        <div class="field"><span>Category</span><select data-ld="category">${Object.entries(LEAVE_CATEGORIES).map(([k, [label]]) => `<option value="${k}" ${k === l.category ? "selected" : ""}>${label}</option>`).join("")}</select></div>
-        <div class="field"><span>Reason / Diagnosis</span><input data-ld="diagnosis" value="${esc(l.diagnosis)}" placeholder="e.g. Back injury (sciatica)"></div>
-        <div class="field"><span>Care Provider</span><input data-ld="provider" value="${esc(l.provider)}" placeholder="e.g. Orlando Health – Dr. Michaels"></div>
+        ${medical ? `<div class="field"><span>Category</span><select data-ld="category">${Object.entries(LEAVE_CATEGORIES).map(([k, [label]]) => `<option value="${k}" ${k === l.category ? "selected" : ""}>${label}</option>`).join("")}</select></div>` : ""}
+        <div class="field"><span>${medical ? "Reason / Diagnosis" : "Reason"}</span><input data-ld="diagnosis" value="${esc(l.diagnosis)}" placeholder="${medical ? "e.g. Back injury (sciatica)" : "Optional"}"></div>
+        ${medical ? `<div class="field"><span>Care Provider</span><input data-ld="provider" value="${esc(l.provider)}" placeholder="e.g. Orlando Health – Dr. Michaels"></div>` : ""}
         <div class="field"><span>Claim / Case Number</span><input data-ld="caseNumber" value="${esc(l.caseNumber)}"></div>
       </div>
       <div class="group"><h3>Dates</h3>
-        <div class="field"><span>Start Date<br><small class="muted">First call-in of the leave</small></span><input type="date" data-ld="startDate" value="${esc(l.startDate)}"></div>
-        <div class="field"><span>Trigger Date<br><small class="muted">First day points are protected</small></span><input type="date" data-ld="triggerDate" value="${esc(l.triggerDate)}"></div>
+        <div class="field"><span>Start Date<br><small class="muted">${medical ? "First call-in of the leave" : "First day of leave"}</small></span><input type="date" data-ld="startDate" value="${esc(l.startDate)}"></div>
+        ${medical ? `<div class="field"><span>Trigger Date<br><small class="muted">First day points are protected</small></span><input type="date" data-ld="triggerDate" value="${esc(l.triggerDate)}"></div>` : ""}
         <div class="field"><span>Expected Return</span><input type="date" data-ld="expectedReturn" value="${esc(l.expectedReturn ?? "")}"></div>
         <div class="field"><span>First Shift Back<br><small class="muted">Leave empty while on leave</small></span><span>
           <input type="date" data-ld="returnDate" value="${esc(l.returnDate ?? "")}">
@@ -1498,7 +1547,7 @@ function showReturnToWork(leave) {
   showDialog(`
     <div class="form">
       <h2>Return to Work</h2>
-      <div>On medical leave since ${Day.long(Day.parse(leave.startDate))}. When is your first shift back?</div>
+      <div>On ${isMedicalLeave(leave) ? "medical leave" : "leave"} since ${Day.long(Day.parse(leave.startDate))}. When is your first shift back?</div>
       <div class="group">
         <div class="field"><span>First shift back</span><input type="date" id="return-date" value="${Day.iso(asOf())}"></div>
         <div class="field"><span>Shift starts (optional)</span><input type="text" class="time-text" id="return-time" placeholder="7:00 AM"></div>
@@ -1707,8 +1756,8 @@ function calendarPage(ev) {
     const d = start + i, p = dayParts(d), items = byDay.get(d) ?? [];
     const cls = [items.some((it) => it.kind === "entry") ? "has" : "", p.m !== fp.m ? "out" : "", d === today ? "today" : "", d === ev.asOf && d !== today ? "viewed" : "", p.dow === 0 || p.dow === 6 ? "weekend" : ""].join(" ");
     const bars = (leaves.get(d) ?? []).map((x) => `<button class="cal-leave ${x.start ? "start" : ""} ${x.end ? "end" : ""} ${p.dow === 0 ? "wk-start" : ""} ${p.dow === 6 ? "wk-end" : ""}"
-        data-action="leave-edit" data-id="${x.leave.id}" title="Medical leave · day ${x.day}${x.ongoing ? " (ongoing)" : ""}">
-        ${x.start || p.dow === 0 ? `${icon("hospital")}<span>Medical leave${x.ongoing && x.start ? " (ongoing)" : ""}</span>` : ""}</button>`).join("");
+        data-action="leave-edit" data-id="${x.leave.id}" title="${esc(leaveLabel(x.leave))} · day ${x.day}${x.ongoing ? " (ongoing)" : ""}">
+        ${x.start || p.dow === 0 ? `${icon(leaveLook(x.leave)[0])}<span>${esc(leaveLabel(x.leave))}${x.ongoing && x.start ? " (ongoing)" : ""}</span>` : ""}</button>`).join("");
     return `<div class="cal-cell ${cls}" data-calday="${d}" title="Double-click to add an entry">
       <div class="cal-num">${p.d === 1 ? `${MONTH_NAMES[p.m].slice(0, 3)} ` : ""}${p.d}</div>
       ${bars}
@@ -1734,7 +1783,7 @@ function calendarPage(ev) {
       <span class="cal-pill c-gray">${icon("cross")}<span>Sick, continues occurrence</span></span>
       <span class="cal-pill c-orange">${icon("user")}<span>Personal</span></span>
       <span class="cal-pill c-red">${icon("gavel")}<span>Reprimand signed</span></span>
-      <span class="cal-pill c-amber">${icon("hospital")}<span>Medical leave</span></span>
+      <span class="cal-pill c-amber">${icon("pt-leave")}<span>Leave</span></span>
       <span class="spacer"></span><span>Click an item for details · double-click a day to add an entry</span>
     </div>
     <div class="cal-dow">${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => `<div>${d}</div>`).join("")}</div>
@@ -1795,7 +1844,7 @@ function mHeader() {
 }
 
 function mTabbar() {
-  const tabs = [["overview", "house", "Overview"], ["callins", "phone", "Call-ins"], null, ["reprimands", "gavel", "Reprimands"], ["calendar", "calendar-days", "Calendar"]];
+  const tabs = [["overview", "house", "Home"], ["callins", "phone", "Call-ins"], null, ["reprimands", "gavel", "Reprimands"], ["calendar", "calendar-days", "Calendar"]];
   const cur = ui.mpage ?? "overview";
   return `<nav class="m-tabbar">${tabs.map((t) => t
     ? `<button class="${cur === t[0] ? "on" : ""}" data-action="m-page" data-page="${t[0]}">${icon(t[1])}<span>${t[2]}</span></button>`
@@ -1816,14 +1865,14 @@ function mOverview(ev) {
     <div class="m-disclaimer">${disclaimerHTML()}</div>`;
 }
 
-/** Overview card that opens the Medical Leaves page. */
+/** Overview card that opens the Leaves page. */
 function mLeaveCard(ev) {
   const cur = currentLeave(ev.asOf);
   const past = data.leaves.filter((l) => l !== cur).length;
   return `
     <button class="panel m-leave-card ${cur ? "active" : ""}" data-action="leave-page">
-      <span class="ld-heart small">${icon("heart-pulse")}</span>
-      <span class="m-leave-text"><b class="head">Medical Leaves</b>
+      <span class="ld-heart small">${icon("pt-leave")}</span>
+      <span class="m-leave-text"><b class="head">Leaves</b>
         <span class="muted">${cur ? `On leave since ${Day.short(Day.parse(cur.startDate))} · day ${leaveDaysCount(cur, ev.asOf)}`
           : `No active leave${past ? ` · ${past} previous` : ""}`}</span></span>
       ${icon("chevron-right")}
@@ -1914,7 +1963,7 @@ function mCalendar(ev) {
   }).join("");
   const items = byDay.get(sel) ?? [];
   const selLeaves = (leaves.get(sel) ?? []).map((x) => `<button class="cal-pill c-amber" data-action="leave-edit" data-id="${x.leave.id}">
-    ${icon("hospital")}<span>Medical leave · day ${x.day}${x.ongoing ? " (ongoing)" : ""}</span></button>`).join("");
+    ${icon(leaveLook(x.leave)[0])}<span>${esc(leaveLabel(x.leave))} · day ${x.day}${x.ongoing ? " (ongoing)" : ""}</span></button>`).join("");
   return `
     <div class="m-section-head">
       <button class="m-iconbtn" data-action="cal-nav" data-delta="-1" aria-label="Previous month">${icon("chevron-left")}</button>
@@ -1947,7 +1996,7 @@ function mSettings() {
   const start = pref(START_CARD, "30");
   return `${settingsPage(`
     <div class="group m-phone-group"><h3>On this phone</h3>
-      <div class="field"><span>Overview opens on</span><div class="seg">
+      <div class="field"><span>Home opens on</span><div class="seg">
         <button class="${start === "30" ? "on" : ""}" data-action="pref" data-key="${START_CARD}" data-value="30">30 days</button>
         <button class="${start === "urgent" ? "on" : ""}" data-action="pref" data-key="${START_CARD}" data-value="urgent">Most urgent</button></div></div>
       <div class="field"><span>Last saved</span><span id="last-saved">${lastSavedText()}</span></div>
@@ -2276,57 +2325,65 @@ function settingsPage(lead = "") {
   const s = data.settings, appearance = pref(STORE.appearance, "dark"), layout = pref(STORE.layout, "adaptive");
   const seg = (key, cur, opts) => `<div class="seg">${opts.map(([v, l]) => `<button class="${v === cur ? "on" : ""}" data-action="pref" data-key="${key}" data-value="${v}">${l}</button>`).join("")}</div>`;
   const num = (key, step = 1) => `<input type="number" step="${step}" data-setting="${key}" value="${s[key]}">`;
-  return `
-    <div class="settings">
-      <h2 class="page-title">Settings</h2>
-      <div class="settings-grid">
-      ${lead}
-      <div class="group"><h3>Appearance</h3>
-        <div class="field"><span>Theme</span>${seg(STORE.appearance, appearance, [["system", "System"], ["light", "Light"], ["dark", "Dark"]])}</div>
-        ${isMobile() ? "" : `<div class="field"><span>Call-ins & reprimands</span>${seg(STORE.layout, layout, [["tabs", "Tabs"], ["sideBySide", "Side by side"], ["adaptive", "Adaptive"]])}</div>
-        <div class="note">Adaptive shows them side by side when the window is wide enough, and as tabs otherwise.</div>`}
-      </div>
+  const field = (label, control, sub = "") => `<div class="field"><span>${label}${sub ? `<small class="muted">${sub}</small>` : ""}</span>${control}</div>`;
+  const rules = `
+    <div class="set-col">
+      <div class="set-col-head"><div><h2>Attendance Rules</h2><div class="muted">Match these to your attendance policy.</div></div>
+        <button class="btn-subtle small" data-action="restore-rules">${icon("rotate-ccw")} Restore Defaults</button></div>
       <div class="group"><h3>Reprimand thresholds</h3>
         ${s.rules.map((r, i) => `<div class="field"><span><input type="number" step="0.5" data-rule="${i}" data-key="threshold" value="${r.threshold}"> points in
           <input type="number" data-rule="${i}" data-key="days" value="${r.days}"> days</span>
-          <button class="iconbtn" style="font-size:16px" data-action="remove-rule" data-index="${i}">${icon("circle-minus")}</button></div>`).join("")}
-        <div class="field"><button class="btn-subtle" data-action="add-rule">Add Threshold</button></div>
-        <div class="field"><span>Extra days a point counts past its window</span>${num("dropOffBufferDays")}</div>
-        <div class="field"><span>Days to show the "double-check CastLife" notice after a point drops off</span>${num("dropOffWarningDays")}</div>
+          <button class="iconbtn" style="font-size:16px" data-action="remove-rule" data-index="${i}" aria-label="Remove threshold">${icon("circle-minus")}</button></div>`).join("")}
+        <div class="field"><button class="btn-subtle" data-action="add-rule">${icon("plus")} Add Threshold</button></div>
+        ${field("Extra days a point counts", num("dropOffBufferDays"), "Past the end of its window")}
       </div>
-      <div class="group"><h3>Points</h3>
-        <div class="field"><span>Call In Personal</span>${num("personalPoints", 0.5)}</div>
-        <div class="field"><span>Call In Sick (first in occurrence)</span>${num("sickPoints", 0.5)}</div>
-      </div>
-      <div class="group"><h3>Sick occurrences</h3>
-        <div class="field"><span>Next sick call within this many days continues it</span>${num("sickStringGapDays")}</div>
-        <div class="field"><span>Call-ins per occurrence before medical leave</span>${num("maxSickString")}</div>
+      <div class="group"><h3>Call-ins</h3>
+        ${field("Call In Personal", num("personalPoints", 0.5), "Points each")}
+        ${field("Call In Sick", num("sickPoints", 0.5), "Points for the first call-in of an occurrence")}
+        ${field("Sick occurrence continues within", `<span>${num("sickStringGapDays")} days</span>`, "The next sick call joins the same occurrence")}
+        ${field("Call-ins per occurrence", num("maxSickString"), "Before it becomes a medical leave")}
       </div>
       <div class="group"><h3>Reprimands</h3>
-        <div class="field"><span>Each lasts this many months from signing</span>${num("reprimandMonths")}</div>
-        <div class="field"><span>Termination at this many in effect</span>${num("terminationAt")}</div>
-        <div class="field"><span>Days to show the "double-check with leadership" notice after reprimands expire</span>${num("expiryWarningDays")}</div>
-        <div class="note">Both notices can be dismissed early with their Confirm button.</div>
+        ${field("Each lasts", `<span>${num("reprimandMonths")} months</span>`, "From the day it's signed")}
+        ${field("Termination at", `<span>${num("terminationAt")} in effect</span>`)}
+      </div>
+    </div>`;
+  const app = `
+    <div class="set-col">
+      <div class="set-col-head"><div><h2>App</h2><div class="muted">How Point Tracker looks, syncs and saves.</div></div></div>
+      ${lead}
+      <div class="group"><h3>Appearance</h3>
+        ${field("Theme", seg(STORE.appearance, appearance, [["system", "System"], ["light", "Light"], ["dark", "Dark"]]))}
+        ${isMobile() ? "" : field("Call-ins & reprimands", seg(STORE.layout, layout, [["tabs", "Tabs"], ["sideBySide", "Side by side"], ["adaptive", "Adaptive"]]),
+          "")}
+        ${isMobile() ? "" : `<div class="note">Adaptive puts them side by side when the window is wide enough, and tabs otherwise.</div>`}
+      </div>
+      <div class="group"><h3>Reminders</h3>
+        ${field("CastLife notice", `<span>${num("dropOffWarningDays")} days</span>`, "Shown for this long after a point drops off")}
+        ${field("Leadership notice", `<span>${num("expiryWarningDays")} days</span>`, "Shown for this long after reprimands expire")}
+        <div class="note">Either notice can be dismissed early with its Confirm button.</div>
       </div>
       ${syncGroup()}
+      <div class="group"><h3>Data</h3>
+        ${field("Backup", `<span class="sync-btns"><button class="btn-subtle" data-action="export">${icon("upload")} Export…</button>
+          <button class="btn-subtle" data-action="import">${icon("download")} Import…</button></span>`)}
+        ${field("Auto-save every", `<span><input type="number" min="${AUTOSAVE_MIN_SECONDS}" step="15" data-setting="autosaveSeconds" value="${s.autosaveSeconds}"> seconds</span>`,
+          "Changes always save right away; this is an extra timed save")}
+        ${env.demo ? field("Sample data", `<button class="btn-subtle btn-danger" data-action="reset-sample">Reset Sample Data</button>`) : ""}
+        ${env.path ? `<div class="note set-path">Saved automatically to ${esc(env.path)}</div>` : ""}
+      </div>
       <div class="group"><h3>Help</h3>
-        <div class="field"><span>New here, or need a refresher?</span><span class="sync-btns">
+        ${field("Getting started", `<span class="sync-btns">
           <button class="btn-subtle" data-action="start-tour">${icon("map")} Take the Tour</button>
-          <button class="btn-subtle" data-action="whats-new">${icon("sparkles")} What's New</button></span></div>
-        ${tauri ? `<div class="field"><span>Updates</span><span class="sync-btns">
-          <button class="btn-subtle" data-action="check-updates">${icon("download")} Check for Updates</button></span></div>
+          <button class="btn-subtle" data-action="whats-new">${icon("sparkles")} What's New</button></span>`)}
+        ${tauri ? `${field("Updates", `<button class="btn-subtle" data-action="check-updates">${icon("download")} Check for Updates</button>`)}
         <div class="note">Point Tracker checks GitHub for a new version when it opens and every 15 minutes. Only the version number is looked up; none of your records are sent.</div>` : ""}
       </div>
-      <div class="group"><h3>Data</h3>
-        <div class="field"><span>Backup</span><span><button class="btn-subtle" data-action="export">Export Backup…</button>
-          <button class="btn-subtle" data-action="import">Import Backup…</button></span></div>
-        <div class="field"><span>Auto-save every</span><span><input type="number" min="${AUTOSAVE_MIN_SECONDS}" step="15" data-setting="autosaveSeconds" value="${s.autosaveSeconds}"> seconds</span></div>
-        <div class="note">Adding, editing or deleting anything is always saved right away; this is an extra timed save on top of that.</div>
-        <div class="field"><button class="btn-subtle" data-action="restore-rules">Restore Default Rules</button>
-          ${env.demo ? `<button class="btn-subtle btn-danger" data-action="reset-sample">Reset Sample Data</button>` : ""}</div>
-        ${env.path ? `<div class="note" style="padding-top:8px;user-select:text">Saved automatically to ${esc(env.path)}</div>` : ""}
-      </div>
-    </div>
+    </div>`;
+  return `
+    <div class="settings">
+      <h2 class="page-title">Settings</h2>
+      <div class="settings-cols">${app}${rules}</div>
     </div>`;
 }
 
@@ -2446,7 +2503,7 @@ document.addEventListener("click", (ev) => {
     case "leave-delete": {
       const l = data.leaves.find((x) => x.id === t.dataset.id);
       if (!l) break;
-      ask("This deletes the medical leave record, its documents and reminders. The call-ins themselves stay.", { title: "Delete Medical Leave?", okLabel: "Delete", danger: true }).then((ok) => {
+      ask("This deletes the leave record, its documents and reminders. The call-ins themselves stay.", { title: "Delete Leave?", okLabel: "Delete", danger: true }).then((ok) => {
         if (!ok) return;
         deleteFiles((l.attachments ?? []).map((a) => a.file));
         data.leaves = data.leaves.filter((x) => x.id !== l.id);
@@ -2538,7 +2595,7 @@ document.addEventListener("click", (ev) => {
       l.returnDate = date;
       if (time) l.returnShiftStart = time; else delete l.returnShiftStart;
       // Returning to work closes the sick occurrence (hidden "Worked / Returned" entry).
-      data.entries.push({ id: uuid(), date, type: "worked", note: "Returned from medical leave", stringMode: "auto", otherLabel: "", otherPoints: 0,
+      data.entries.push({ id: uuid(), date, type: "worked", note: `Returned from ${isMedicalLeave(l) ? "medical leave" : "leave"}`, stringMode: "auto", otherLabel: "", otherPoints: 0,
         otherBreaksString: true, created: stamp(), leaveId: l.id, ...(time ? { shiftStart: time } : {}) });
       closeOverlay(); save();
       break;
@@ -2630,7 +2687,14 @@ document.addEventListener("click", (ev) => {
     case "pref": setPref(t.dataset.key, t.dataset.value); if (t.dataset.key === START_CARD) ui.cardIndex = null; applyAppearance(); render(); renderSettings(); break;
     case "add-rule": s.rules.push({ id: uuid(), days: 30, threshold: 3 }); save(); renderSettings(); break;
     case "remove-rule": s.rules.splice(Number(t.dataset.index), 1); save(); renderSettings(); break;
-    case "restore-rules": data.settings = E.defaultSettings(); save(); startAutosave(); break;
+    case "restore-rules":
+      ask("Thresholds, points, occurrence limits, reprimand rules and reminder days all go back to their defaults. Your records aren't changed.",
+        { title: "Restore Default Rules?", okLabel: "Restore Defaults" }).then((ok) => {
+        if (!ok) return;
+        data.settings = { ...E.defaultSettings(), autosaveSeconds: data.settings.autosaveSeconds };
+        save(); startAutosave();
+      });
+      break;
     case "add-attachment": pickAttachments().catch((err) => alert(err)); break;
     case "open-attachment": openAttachment(t.dataset.file).catch((err) => alert(`Couldn't open it: ${err}`)); break;
     case "remove-attachment": {
@@ -2718,6 +2782,7 @@ document.addEventListener("change", (ev) => {
       el.value = fmtTime(t);
       if (t) l[el.dataset.ldTime] = t; else delete l[el.dataset.ldTime];
     } else l[el.dataset.ld] = el.value;
+    if (el.dataset.ld === "leaveType") openLeaveDetails(l, overlay.isNew); // medical fields come and go
     return;
   }
   if (el.matches("[data-leave-sort]")) { ui.leaveSort = el.value; render(); return; }
@@ -2758,6 +2823,23 @@ document.addEventListener("change", (ev) => {
     if (["signedDate", "ruleDays", "expOverride"].includes(key)) renderReprimandEditor();
   }
 });
+
+// Sideways strips (Work Points Progress cards, leave stat tiles): a mouse's up/down wheel scrolls them
+// left/right. At either end, the wheel goes back to scrolling the page. Trackpad sideways swipes work as usual.
+document.addEventListener("wheel", (ev) => {
+  if (isMobile() || ev.ctrlKey || ev.shiftKey || Math.abs(ev.deltaY) <= Math.abs(ev.deltaX)) return;
+  const strip = ev.target.closest?.(".cards, .ld-stats");
+  if (!strip || strip.scrollWidth <= strip.clientWidth + 1) return;
+  const d = ev.deltaY * (ev.deltaMode === 1 ? 32 : ev.deltaMode === 2 ? strip.clientWidth : 1);
+  const max = strip.scrollWidth - strip.clientWidth;
+  if ((d < 0 && strip.scrollLeft <= 0) || (d > 0 && strip.scrollLeft >= max - 1)) return;
+  ev.preventDefault();
+  // Snapping would pull each small step back, so it's paused while the wheel turns and settles after.
+  strip.style.scrollSnapType = "none";
+  strip.scrollLeft = Math.max(0, Math.min(max, strip.scrollLeft + d));
+  clearTimeout(strip._snapTimer);
+  strip._snapTimer = setTimeout(() => { strip.style.scrollSnapType = ""; }, 160);
+}, { passive: false });
 
 document.addEventListener("input", (ev) => {
   const el = ev.target, key = el.dataset.bind;

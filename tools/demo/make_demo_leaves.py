@@ -90,6 +90,10 @@ d["leaves"] = [
           provider="Digestive Health Associates", status="Closed"),
     leave(startDate="2023-08-15", triggerDate="2023-08-21", returnDate="2023-08-26", category="injury", diagnosis="Sprained Wrist",
           provider="AdventHealth Urgent Care", status="Approved"),
+    leave(startDate="2025-09-15", triggerDate="2025-09-15", returnDate="2025-09-19", leaveType="Bereavement", status="Closed",
+          diagnosis="Grandmother's funeral", note="Approved by my leader. Travel to Ohio for the service."),
+    leave(startDate="2024-02-05", triggerDate="2024-02-05", returnDate="2024-02-08", leaveType="Jury Duty", status="Closed",
+          diagnosis="Orange County jury service", caseNumber="JS-24-0117"),
 ]
 d["attachmentFiles"] = files
 json.dump(d, open("sample/demo-data.json", "w"), indent=2)

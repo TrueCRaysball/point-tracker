@@ -436,6 +436,42 @@
       "startDate": "2023-08-15",
       "triggerDate": "2023-08-21",
       "returnDate": "2023-08-26"
+    },
+    {
+      "id": "5E1A2B7C-3D4F-4A9B-8C21-6F0E9D3B7A15",
+      "leaveType": "Bereavement",
+      "status": "Closed",
+      "category": "other",
+      "diagnosis": "Grandmother's funeral",
+      "provider": "",
+      "caseNumber": "",
+      "expectedReturn": "",
+      "note": "Approved by my leader. Travel to Ohio for the service.",
+      "reminders": [],
+      "attachments": [],
+      "confirmedAt": "2025-09-15T12:00:00Z",
+      "updatedAt": "2025-09-15T12:00:00Z",
+      "startDate": "2025-09-15",
+      "triggerDate": "2025-09-15",
+      "returnDate": "2025-09-19"
+    },
+    {
+      "id": "9C4D8E2F-1A7B-4E36-B5D0-2A8F7C1E4B93",
+      "leaveType": "Jury Duty",
+      "status": "Closed",
+      "category": "other",
+      "diagnosis": "Orange County jury service",
+      "provider": "",
+      "caseNumber": "JS-24-0117",
+      "expectedReturn": "",
+      "note": "",
+      "reminders": [],
+      "attachments": [],
+      "confirmedAt": "2024-02-05T12:00:00Z",
+      "updatedAt": "2024-02-05T12:00:00Z",
+      "startDate": "2024-02-05",
+      "triggerDate": "2024-02-05",
+      "returnDate": "2024-02-08"
     }
   ],
   "attachmentFiles": {

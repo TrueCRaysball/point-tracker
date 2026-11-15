@@ -8,6 +8,24 @@
 
 export const NOTES = [
   {
+    version: "1.8.1",
+    features: [
+      {
+        icon: "pt-leave", color: "blue", title: "Leaves, Not Just Medical",
+        text: "The Medical Leaves page is now Leaves. Track a personal leave of absence, parental leave, bereavement, military leave or jury duty the same way: details, a timeline, notes, reminders and documents. Medical leaves work just as before.",
+      },
+      {
+        icon: "settings", color: "purple", title: "A Tidier Settings Page",
+        text: "Settings is now in two columns: how the app looks, syncs and saves on one side, and your attendance rules on the other.",
+      },
+    ],
+    also: [
+      "The Overview tab is now called Home.",
+      "What's New has a close button in the corner, so you don't have to scroll to the bottom.",
+      "Restore Defaults now asks first, and keeps your auto-save setting.",
+    ],
+  },
+  {
     version: "1.8.0",
     features: [
       {
