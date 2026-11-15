@@ -8,6 +8,19 @@
 
 export const NOTES = [
   {
+    version: "2.1.0",
+    features: [
+      {
+        icon: "user-x", color: "red", title: "Remove Synced Devices",
+        text: "In Settings → Nearby Sync, each paired device now has a remove button. Use it for a phone you replaced or reset, or any device that shouldn't sync anymore. A removed device is told so and stops syncing; your records stay on both. Pair it again any time to bring it back.",
+      },
+    ],
+    also: [
+      "On the phone, the header waves fade into the page, and the leave banner is laid out as a tidy card.",
+      "The What's New screen's header now fades its waves into the background, like the main header.",
+    ],
+  },
+  {
     version: "2.0.0",
     features: [
       {

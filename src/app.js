@@ -727,6 +727,7 @@ function initSync() {
       thumbCache.delete(f);
     },
     onStatus: refreshSyncGroup,
+    onRemoved: ({ name }) => { refreshSyncGroup(); toast("user-x", `${esc(name)} removed this device from Nearby Sync.`); },
     onPaired: ({ name }) => {
       const el = document.getElementById("sync-pair-status");
       if (el) el.innerHTML = `${icon("loader-circle")} Connected to ${esc(name)}. Syncing…`, lucide.createIcons();
@@ -786,7 +787,9 @@ function syncGroup() {
     : st.error ? `<span class="sync-err">${icon("circle-alert")} ${esc(st.error)}</span>`
     : `<span class="muted">Syncs automatically whenever both devices are open.</span>`;
   return `<div class="group" id="sync-group">${head}
-    ${c.devices.map((d) => `<div class="field sync-device"><span>${icon(/iPhone|Android|iPad/.test(d.name) ? "smartphone" : "monitor")} <b>${esc(d.name)}</b></span><span class="muted">${ago(d.lastSync)}</span></div>`).join("")}
+    ${c.devices.map((d) => `<div class="field sync-device"><span>${icon(/iPhone|Android|iPad/.test(d.name) ? "smartphone" : "monitor")} <b>${esc(d.name)}</b></span>
+      <span class="sync-device-end"><span class="muted">${ago(d.lastSync)}</span>
+        <button class="btn-subtle square btn-danger sync-remove" data-action="sync-remove" data-id="${esc(d.id)}" title="Remove ${esc(d.name)}…" aria-label="Remove ${esc(d.name)}">${icon("x")}</button></span></div>`).join("")}
     <div class="sync-line" id="sync-line">${line}</div>
     <div class="field"><span class="sync-btns"><button class="btn-primary" data-action="sync-now" ${st.busy ? "disabled" : ""}>${icon("refresh-cw")} Sync Now</button>
       <button class="btn-subtle" data-action="sync-pair">Pair Another Device…</button>
@@ -2571,6 +2574,15 @@ document.addEventListener("click", (ev) => {
     case "sync-join": showJoinDialog(); break;
     case "sync-join-go": joinWithCode(document.getElementById("sync-code")?.value); break;
     case "sync-now": syncToastWanted = true; S.syncNow().then((r) => { if (!r.synced) syncToastWanted = false; }); break;
+    case "sync-remove": {
+      const d = S.config()?.devices.find((x) => x.id === t.dataset.id);
+      if (!d) break;
+      const here = tauri || !isMobile() ? "computer" : "phone";
+      ask(`${d.name} won't sync with this ${here} anymore, and it will be told it was removed the next time it tries. Records already on either device stay where they are. To sync with it again, pair it again.`,
+        { title: `Remove ${d.name}?`, okLabel: "Remove", danger: true })
+        .then((ok) => { if (ok) { S.removeDevice(d.id); refreshSyncGroup(); toast("user-x", `Removed ${esc(d.name)} from Nearby Sync.`); } });
+      break;
+    }
     case "sync-off":
       ask("Your data stays on this device; it just stops syncing. You can pair again any time.", { title: "Turn Off Nearby Sync?", okLabel: "Turn Off", danger: true })
         .then((ok) => { if (ok) { S.unpair(); refreshSyncGroup(); } });

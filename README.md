@@ -96,6 +96,7 @@ To keep a backup or move your data to another device, use **Settings → Data �
 - **Finding each other:** devices use PeerJS's free public server only to find each other, then connect directly (WebRTC). When a direct connection isn't possible, PeerJS's relay server forwards the data.
 - **Encryption:** everything sent is encrypted with the pairing key (AES-GCM), so neither server can read or change your data, and nothing is stored on them.
 - **Merging:** each record carries the time it last changed, and deletions are remembered, so the newest change wins and nothing is wiped.
+- **Removing a device:** each paired device has a remove button in Settings → Nearby Sync. A removed device is remembered and turned away. When it next tries to sync, it's told it was removed and drops this device too, but records already on either device stay put. Showing a pairing code lets removed devices pair again for 10 minutes.
 
 ## Building from source
 

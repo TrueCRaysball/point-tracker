@@ -15,8 +15,8 @@ const CHUNK = 48 * 1024; // bytes of a document per message
 const CONNECT_TIMEOUT = 12000;
 const IDLE_TIMEOUT = 30000; // give up on a sync that goes quiet this long
 
-let host = null; // { configKey, deviceName, payload, apply, files, hasFile, readFile, writeFile, onStatus, onPaired }
-let cfg = null; // { key, deviceId, devices: [{ id, name, lastSync }], lastSync }
+let host = null; // { configKey, deviceName, payload, apply, files, hasFile, readFile, writeFile, onStatus, onPaired, onRemoved }
+let cfg = null; // { key, deviceId, devices: [{ id, name, lastSync }], removed: [deviceId], lastSync }
 let peer = null;
 let aesKey = null;
 let groupId = "";
@@ -199,6 +199,7 @@ export async function startPairing() {
     cfg = { key: toB32(random(KEY_BYTES)), deviceId: toB32(random(ID_BYTES)), devices: [], lastSync: null };
     saveConfig();
   }
+  repairUntil = Date.now() + REPAIR_WINDOW; // a removed device scanning this code is let back in
   if (!peer || peer.destroyed || peer.disconnected) await goOnline();
   return { code: pairingCode(), qr: pairingQrText() };
 }
@@ -212,7 +213,9 @@ export async function join(text) {
   if (deviceId === parsed.deviceId) throw new Error("That's this device's own code. Enter it on the other device.");
   const devices = same ? cfg.devices : [];
   if (!devices.some((d) => d.id === parsed.deviceId)) devices.push({ id: parsed.deviceId, name: "Other device", lastSync: null });
-  cfg = { key: parsed.key, deviceId, devices, lastSync: same ? cfg.lastSync : null };
+  // Pairing with a device on purpose undoes an earlier "Remove".
+  const removed = (same ? cfg.removed ?? [] : []).filter((x) => x !== parsed.deviceId);
+  cfg = { key: parsed.key, deviceId, devices, removed, lastSync: same ? cfg.lastSync : null };
   saveConfig();
   await goOnline();
   return syncWith(parsed.deviceId, { pairing: true });
@@ -234,6 +237,33 @@ export function forgetDevice(id) {
   cfg.devices = cfg.devices.filter((d) => d.id !== id);
   saveConfig();
   setStatus({});
+}
+
+// ---------- Removing a device ----------
+// Removing forgets the device here and turns it away from now on: when it tries to sync, it's told it was
+// removed (so it drops this device too) and the connection closes. It still has the pairing key, so it's
+// remembered as removed rather than just forgotten; otherwise it would come back the next time it synced
+// in, or when another paired device listed it. Records already on either device stay where they are.
+// Showing a pairing code lets removed devices back in for a while, so they can always be paired again.
+
+const REPAIR_WINDOW = 10 * 60 * 1000;
+let repairUntil = 0;
+const isRemoved = (id) => !!cfg?.removed?.includes(id) && Date.now() > repairUntil;
+
+export function removeDevice(id) {
+  if (!cfg) return;
+  cfg.devices = cfg.devices.filter((d) => d.id !== id);
+  cfg.removed = [...new Set([...(cfg.removed ?? []), id])];
+  repairUntil = 0; // removing ends any pairing window, so the removal takes effect right away
+  sessions.get(id)?.conn.close();
+  saveConfig();
+  setStatus({});
+}
+/** Lets a removed device back in (it's being paired again). */
+function unremove(id) {
+  if (!cfg?.removed?.includes(id)) return;
+  cfg.removed = cfg.removed.filter((x) => x !== id);
+  saveConfig();
 }
 
 // ---------- Syncing ----------
@@ -302,6 +332,14 @@ function syncWith(deviceId, { pairing = false } = {}) {
 
 function accept(conn) {
   const from = deviceIdFromPeer(conn.peer);
+  if (isRemoved(from)) {
+    // Tell it it was removed (so it stops trying and forgets this device), then hang up.
+    conn.on("open", async () => {
+      try { conn.send(await seal({ t: "removed", name: host.deviceName })); } catch {}
+      setTimeout(() => conn.close(), 600);
+    });
+    return;
+  }
   const existing = sessions.get(from);
   // Both sides started at once: keep the connection started by the device with the smaller ID.
   if (existing && (existing.outgoing ? cfg.deviceId < from : true)) { conn.close(); return; }
@@ -341,6 +379,7 @@ function run(conn, deviceId, outgoing) {
     if (s.replacement) { s.replacement.then(resolveDone, rejectDone); return; }
     if (err) { rejectDone(err); return; }
     const when = new Date().toISOString();
+    unremove(deviceId);
     const known = cfg.devices.find((d) => d.id === deviceId);
     if (known) Object.assign(known, { name, lastSync: when });
     else cfg.devices.push({ id: deviceId, name, lastSync: when });
@@ -371,7 +410,7 @@ function run(conn, deviceId, outgoing) {
           name = String(msg.name || name).slice(0, 40);
           // Learn about the group's other devices so this one can reach them too.
           for (const d of msg.devices ?? []) {
-            if (d.id !== cfg.deviceId && d.id !== deviceId && !cfg.devices.some((x) => x.id === d.id)) cfg.devices.push({ id: d.id, name: d.name, lastSync: null });
+            if (d.id !== cfg.deviceId && d.id !== deviceId && !cfg.removed?.includes(d.id) && !cfg.devices.some((x) => x.id === d.id)) cfg.devices.push({ id: d.id, name: d.name, lastSync: null });
           }
           saveConfig();
           host.onPaired?.({ id: deviceId, name });
@@ -412,6 +451,14 @@ function run(conn, deviceId, outgoing) {
           break;
         }
         case "nofile": wanted?.delete(msg.name); break;
+        case "removed": {
+          // The other device removed this one: stop syncing with it.
+          const who = String(msg.name || name).slice(0, 40);
+          forgetDevice(deviceId);
+          host.onRemoved?.({ id: deviceId, name: who });
+          finish(new Error(`${who} removed this device from Nearby Sync. Pair again to sync with it.`));
+          return;
+        }
         case "done": gotDone = true; break;
       }
       await maybeDone();
