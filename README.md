@@ -4,7 +4,7 @@
 
 <h1 align="center">Point Tracker</h1>
 
-<p align="center">A desktop app for keeping track of attendance points and reprimands.</p>
+<p align="center">An app for keeping track of attendance points, reprimands and medical leaves, on your computer and your phone.</p>
 
 <p align="center"><b>Beta:</b> Point Tracker is still being polished, so things may change.</p>
 
@@ -13,17 +13,22 @@
 ## Features
 
 - **Work Points Progress:** your points in the 30, 90, 180 and 365-day windows, color-coded by how close you are to a reprimand, with when each point drops off.
+- **Call-ins:** Call In Sick, Call In Personal, Worked / Returned, ADO, Picked Up Shift, Dropped Shift, or Other (your own label). Each entry can hold the shift you called out of, when you submitted it to CastLife, a note and attachments. Points follow the rules, and you can override them.
 - **Sick-call occurrences:** consecutive sick call-ins count as one point. The app tracks each occurrence and flags when one reaches the medical-leave limit.
-- **Reprimands:** record reprimands when you sign them and choose which points each one uses. The app tracks how many are in effect and when they expire together.
+- **Reprimands:** record reprimands when you sign them and choose which points each one uses (or let **Select points in window** pick them). A banner tells you when you've earned one, and the app tracks how many are in effect and when they expire together.
+- **Medical leaves:** a page for each leave with its details (type, status, claim number, care provider, expected return), a timeline, notes, upcoming dates and reminders, and all its documents. Close it out with **Return to Work**, and search past leaves any time.
 - **Reminders to double-check:**
   - a notice to confirm in CastLife when a point drops off
   - a notice to confirm with leadership when reprimands expire
 - **Calendar:** a month view of every day you called out.
+- **View as of another date:** see your points as they were, or will be, on any day.
 - **Built-in file viewer:** attachments open right in the app, with no other program needed. It handles PDFs, Word documents (.docx), spreadsheets (Excel, CSV, OpenDocument), images (JPG, PNG, GIF, WebP, HEIC, SVG, TIFF and more), text and RTF files, and audio or video. Anything else can still be opened with another app.
 - **Nearby Sync:** pair your computer and phone once with a QR code, and they keep each other up to date (call-ins, reprimands, medical leaves, documents and settings) with no account and no cloud storage. Both need Point Tracker open at the same time. Changes are merged, so nothing gets overwritten. Not available on Linux builds whose web view lacks WebRTC.
-- **Updates install themselves (desktop, from 1.8.0):** the app checks for a new version when it opens and every 15 minutes. Click **Install Update** and it downloads, installs and restarts, on Mac, Windows and the Linux AppImage. Linux `.deb`, `.rpm` and AUR installs get a notice instead, since the package manager handles those. The Home Screen version updates itself.
-- **Your data stays on your computer.** It saves automatically, and you can export and import backups.
-- **Light and dark mode.** Every rule (thresholds, windows, occurrence limits) can be changed in Settings.
+- **Updates install themselves (desktop, from 1.8.0):** the app checks for a new version when it opens and every 15 minutes. Click **Install Update** and it downloads, installs and restarts, on Mac, Windows and the Linux AppImage. Linux `.deb` and `.rpm` installs get a notice instead, since the package manager handles those. The phone version updates itself.
+- **Phone version:** a Home Screen web app with a phone-friendly layout that works offline (see [On your phone](#on-your-phone)).
+- **Getting started:** a welcome screen, a guided tour you can take again any time, and a What's New screen after each update.
+- **Your data stays on your device.** It saves automatically, and you can export and import backups.
+- **Make it yours:** light, dark or system theme; call-ins and reprimands as tabs or side by side; and every rule (thresholds, windows, points per call type, occurrence limits, reprimand length) can be changed in Settings.
 
 ## Download
 
@@ -36,9 +41,9 @@ Get the latest version from the [**Releases**](../../releases) page.
 | Windows 32-bit | `Point.Tracker_x.y.z_x86-setup.exe` |
 | Linux 64-bit (Intel/AMD) | `.AppImage`, `.deb` (Ubuntu/Debian) or `.rpm` (Fedora) marked `amd64` / `x86_64` |
 | Linux 64-bit (ARM) | `.AppImage`, `.deb` or `.rpm` marked `aarch64` / `arm64` |
-| Arch Linux (and Manjaro, EndeavourOS) | From the AUR: `yay -S point-tracker-bin` (Intel/AMD and ARM) |
+| iPhone or Android | The Home Screen version (see [On your phone](#on-your-phone)) |
 
-Intel Macs are not supported.
+Intel Macs are not supported. An Arch Linux (AUR) package is coming; until then, Arch users can use the AppImage.
 
 ### First launch (the builds are not code-signed yet)
 
@@ -57,6 +62,14 @@ Intel Macs are not supported.
 - **.deb:** install with `sudo apt install ./Point*.deb`.
 - **.rpm:** install with `sudo dnf install ./Point*.rpm`.
 
+## On your phone
+
+Open **https://truecraysball.github.io/point-tracker/** on your phone and add it to your Home Screen:
+- **iPhone:** in Safari, tap **Share**, then **Add to Home Screen**.
+- **Android:** in Chrome, tap the **⋮** menu, then **Add to Home screen** (or **Install app**).
+
+It works offline, updates itself (tap **Update Now** when the notice shows), and keeps your data on your phone only; the website just serves the app's files. Use [Nearby Sync](#how-nearby-sync-works) to keep it matched with your computer.
+
 ## Where your data lives
 
 Your data saves automatically to a single `data.json` file:
@@ -67,7 +80,9 @@ Your data saves automatically to a single `data.json` file:
 | Windows | `%APPDATA%\com.craysball.pointtracker\` |
 | Linux | `~/.local/share/com.craysball.pointtracker/` |
 
-To keep a backup or move your data to another computer, use **Settings → Data → Export Backup / Import Backup**.
+On the phone version, data is kept in the browser's storage for the Home Screen app. Removing the app from your Home Screen (or clearing Safari's website data) deletes it, so export a backup first.
+
+To keep a backup or move your data to another device, use **Settings → Data → Export Backup / Import Backup**.
 
 ### How Nearby Sync works
 
@@ -88,13 +103,23 @@ npm install
 npm run build          # Point Tracker for this computer → ./builds
 npm run build:demo     # Demo version with sample data
 npm run build:release  # macOS: Apple Silicon .app + .dmg → ./builds/Release
+npm run web            # Prepares src/ as the phone (Home Screen) version
 ```
 
-Pushing a tag such as `v1.2.0` runs the [release workflow](.github/workflows/release.yml). It builds every supported platform and attaches the files to a draft release.
+**Releases:** pushing a tag such as `v1.2.0` runs the [release workflow](.github/workflows/release.yml):
+1. It creates one draft release.
+2. It builds every supported platform, signs each update package and uploads the files.
+3. It writes `latest.json` (see [Updates](#updates)) from all the signed packages.
+
+Check the draft, then publish it; installed apps see the update once it's published. To redo an existing tag's release, run the workflow from the Actions tab and enter the tag.
+
+**Phone version:** every push to `main` that changes the app redeploys it to GitHub Pages ([pages workflow](.github/workflows/pages.yml)).
 
 **Version and build numbers:**
 - The **version** is set in `src-tauri/tauri.conf.json`.
 - Every build stamps a **build number** from the build time (`YYMMDDHHmm`), shown in **About Point Tracker**.
+- The **stage label** ("Beta") is `STAGE` in `src/whatsnew.js`. It's shown with every version number ("Beta 1.8.0"), while the version itself stays a plain number. Set it to `""` when the beta is over.
+- **What's New** notes go in `src/whatsnew.js`, one entry per version.
 
 **Optional settings:** create a `local.config.json` (it's ignored by git) to change where local builds go, for example:
 
@@ -115,7 +140,7 @@ The release workflow signs every update package, and the app installs only packa
 
 ## Arch Linux package (AUR)
 
-Arch users get Point Tracker from the AUR as `point-tracker-bin`. It installs the `.deb` from each GitHub release. After a release is published:
+Not published yet. When it is, Arch users will get Point Tracker from the AUR as `point-tracker-bin` (`yay -S point-tracker-bin`), which installs the `.deb` from each GitHub release. After a release is published:
 
 1. Run `node scripts/aur.mjs`. It downloads that release's `.deb` files and writes `packaging/aur/PKGBUILD` and `.SRCINFO` with the new version and checksums.
 2. Copy both files into the AUR repository (`ssh://aur@aur.archlinux.org/point-tracker-bin.git`), then commit and push.
