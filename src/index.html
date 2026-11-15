@@ -3,6 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Security policy, for the desktop and phone versions alike: only the app's own files may run, and the
+       network is limited to Nearby Sync's introduction server (PeerJS). Updates and links go through the
+       desktop app itself. It's set here rather than in tauri.conf.json (app.security.csp) because that one
+       would also apply to vendor/viewer/heic-frame.html, which has its own, separate policy. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; worker-src 'self' blob:; frame-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost https://0.peerjs.com wss://0.peerjs.com; object-src 'none'; base-uri 'self'; form-action 'none'">
   <title>Point Tracker</title>
   <!-- Home Screen app (web version) -->
   <link rel="manifest" href="manifest.webmanifest">

@@ -2,6 +2,7 @@ import * as E from "./engine.js";
 import * as WS from "./webstore.js";
 import * as V from "./viewer.js";
 import * as S from "./sync.js";
+import * as B from "./backup.js";
 import * as W from "./whatsnew.js";
 import * as T from "./tour.js";
 
@@ -497,59 +498,184 @@ const blobToBase64 = (blob) => new Promise((resolve) => {
 });
 const referencedFiles = (d) => [...d.entries, ...d.reprimands, ...(d.leaves ?? [])].flatMap((x) => x.attachments ?? []).map((a) => a.file);
 
-async function exportBackup() {
-  if (!tauri) {
-    const attachmentFiles = {};
-    for (const f of referencedFiles(data)) { const b = await WS.getFile(f); if (b) attachmentFiles[f] = await blobToBase64(b); }
-    const name = `PointTracker-backup-${Day.iso(Day.today())}.json`;
-    const file = new File([JSON.stringify({ ...data, attachmentFiles }, null, 2)], name, { type: "application/json" });
-    if (navigator.canShare?.({ files: [file] })) return navigator.share({ files: [file], title: name }).catch(() => {});
-    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(file), download: name });
-    return a.click();
+// ---------- Backups ----------
+// A backup is one file holding every record plus every attached document (base64), so it's complete
+// on its own. By default it's encrypted with a password first (see backup.js). Import replaces all data.
+
+const backupName = () => `PointTracker-backup-${Day.iso(Day.today())}.json`;
+
+/** The backup's text: the data plus every attached document, encrypted if a password is given. */
+async function backupText(password) {
+  const attachmentFiles = {};
+  for (const f of new Set(referencedFiles(data))) {
+    if (!safeFileName(f)) continue;
+    try {
+      if (tauri) attachmentFiles[f] = await tauri.core.invoke("read_attachment", { file: f });
+      else { const b = await WS.getFile(f); if (b) attachmentFiles[f] = await blobToBase64(b); }
+    } catch {} // a missing file is left out, as before
   }
-  const path = await tauri.dialog.save({ defaultPath: `PointTracker-backup-${Day.iso(Day.today())}.json`, filters: [{ name: "JSON", extensions: ["json"] }] });
-  if (path) await tauri.core.invoke("export_backup", { path, json: JSON.stringify(data) });
-}
-async function importBackupWeb() {
-  const input = Object.assign(document.createElement("input"), { type: "file", accept: ".json,application/json" });
-  input.onchange = async () => {
-    const f = input.files[0];
-    if (!f) return;
-    let imported;
-    try { imported = JSON.parse(await f.text()); } catch { return alert("That file isn't a Point Tracker backup."); }
-    if (!confirm(`Replace all data?\n\nThis replaces your current ${data.entries.length} entries and ${data.reprimands.length} reprimands with ${imported.entries?.length ?? 0} entries and ${imported.reprimands?.length ?? 0} reprimands from the backup.`)) return;
-    for (const [name, b64] of Object.entries(imported.attachmentFiles ?? {})) {
-      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-      await WS.putFile(name, new Blob([bytes], { type: name.endsWith(".pdf") ? "application/pdf" : MIME[extOf(name)] ?? "image/png" }));
-    }
-    delete imported.attachmentFiles;
-    data = imported;
-    data.settings = { ...E.defaultSettings(), ...(data.settings ?? {}) };
-    data.entries ??= []; data.reprimands ??= [];
-    data.confirmations ??= { dropOffs: [], expirations: [] };
-    data.confirmations.leaveDismissed ??= [];
-    data.leaves ??= [];
-    normalizeLeaves();
-    save();
-    startAutosave();
-  };
-  input.click();
+  const backup = { ...data, attachmentFiles };
+  return password ? B.encrypt(JSON.stringify(backup), password) : JSON.stringify(backup, null, 2);
 }
 
+/** Export: explains what's in the file and offers a password (on by default). */
+function exportBackup() {
+  overlay = { kind: "export" };
+  const can = B.supported();
+  showDialog(`<div class="form"><h2>Export Backup</h2>
+      <div class="backup-warn">${icon("shield-alert")}<span>A backup holds <b>everything</b>: your call-ins and reprimands, leave details like diagnoses and case numbers, and every attached document. Keep it somewhere private, and don't post it or attach it to a bug report.</span></div>
+      ${can ? `<label class="backup-check"><input type="checkbox" id="bk-protect" checked> <span><b>Protect with a password</b> (recommended)<br><span class="muted small">The file is encrypted on this ${tauri || !isMobile() ? "computer" : "phone"}, so it can't be read without the password.</span></span></label>
+      <div class="group" id="bk-fields">
+        <div class="field"><span>Password</span><input type="password" id="bk-pass" autocomplete="new-password" placeholder="At least ${B.MIN_PASSWORD} characters"></div>
+        <div class="field"><span>Confirm password</span><input type="password" id="bk-pass2" autocomplete="new-password"></div>
+      </div>
+      <div class="note" id="bk-note" style="padding:0">Write the password down somewhere safe. If it's forgotten, the backup can't be opened, by anyone.</div>` : ""}
+      <div id="bk-status" class="sync-err" hidden></div>
+    </div>
+    <div class="dialog-actions"><span class="spacer"></span>
+      <button class="btn-subtle" data-action="close">Cancel</button>
+      <button class="btn-primary" data-action="export-go">${icon("upload")} Export…</button>
+    </div>`);
+  const protect = document.getElementById("bk-protect");
+  protect?.addEventListener("change", () => {
+    document.getElementById("bk-fields").hidden = !protect.checked;
+    document.getElementById("bk-note").hidden = !protect.checked;
+    document.getElementById("bk-status").hidden = true;
+  });
+  document.getElementById("bk-pass")?.focus();
+  for (const id of ["bk-pass", "bk-pass2"]) document.getElementById(id)?.addEventListener("keydown", (e) => { if (e.key === "Enter") exportGo(); });
+}
+
+async function exportGo() {
+  const status = document.getElementById("bk-status"), go = document.querySelector('[data-action="export-go"]');
+  const fail = (msg) => { status.textContent = msg; status.hidden = false; go?.removeAttribute("disabled"); };
+  const protect = document.getElementById("bk-protect")?.checked ?? false;
+  const pass = document.getElementById("bk-pass")?.value ?? "";
+  if (protect) {
+    if (pass.length < B.MIN_PASSWORD) return fail(`Use a password of at least ${B.MIN_PASSWORD} characters.`);
+    if (pass !== document.getElementById("bk-pass2").value) return fail("The two passwords don't match.");
+  }
+  status.hidden = true;
+  go?.setAttribute("disabled", "");
+  try {
+    if (tauri) {
+      const path = await tauri.dialog.save({ defaultPath: backupName(), filters: [{ name: "Point Tracker Backup", extensions: ["json"] }] });
+      if (!path) { go?.removeAttribute("disabled"); return; }
+      go.innerHTML = `${icon("loader-circle")} ${protect ? "Encrypting…" : "Saving…"}`; lucide.createIcons();
+      await tauri.core.invoke("write_text_file", { path, contents: await backupText(protect ? pass : null) });
+      closeOverlay();
+      toast(protect ? "lock" : "circle-check", protect ? "Backup saved, protected with your password." : "Backup saved.");
+      return;
+    }
+    go.innerHTML = `${icon("loader-circle")} ${protect ? "Encrypting…" : "Preparing…"}`; lucide.createIcons();
+    const file = new File([await backupText(protect ? pass : null)], backupName(), { type: "application/json" });
+    // Sharing needs a fresh tap (preparing the file can outlast the first one), so it gets its own button.
+    overlay = { kind: "export-ready", file };
+    showDialog(`<div class="form"><h2>Backup Ready</h2>
+        <div class="sync-ok">${icon(protect ? "lock" : "circle-check")} ${protect ? "Encrypted with your password." : "Not password protected."}</div>
+        <div class="muted">${navigator.canShare?.({ files: [file] }) ? "Choose where to save it, like Files or iCloud Drive." : "It will be saved to your downloads."}</div></div>
+      <div class="dialog-actions"><span class="spacer"></span>
+        <button class="btn-subtle" data-action="close">Cancel</button>
+        <button class="btn-primary" data-action="export-save">${icon("download")} Save Backup…</button></div>`);
+  } catch (err) {
+    fail(`Couldn't export: ${err.message ?? err}`);
+  }
+}
+
+function exportSaveWeb() {
+  const file = overlay?.file;
+  if (!file) return;
+  closeOverlay();
+  if (navigator.canShare?.({ files: [file] })) return navigator.share({ files: [file], title: file.name }).catch(() => {});
+  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(file), download: file.name });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+
+/** Import: pick a file, unlock it if it's password protected, confirm, then replace all data. */
 async function importBackup() {
-  if (!tauri) return importBackupWeb();
-  const path = await tauri.dialog.open({ multiple: false, filters: [{ name: "JSON", extensions: ["json"] }] });
-  if (!path) return;
-  const imported = JSON.parse(await tauri.core.invoke("import_backup", { path }));
-  const ok = await tauri.dialog.ask(
-    `This replaces your current ${data.entries.length} entries and ${data.reprimands.length} reprimands with ${imported.entries?.length ?? 0} entries and ${imported.reprimands?.length ?? 0} reprimands from the backup.`,
-    { title: "Replace all data?", kind: "warning", okLabel: "Replace", cancelLabel: "Cancel" });
+  let text;
+  if (tauri) {
+    const path = await tauri.dialog.open({ multiple: false, filters: [{ name: "Point Tracker Backup", extensions: ["json"] }] });
+    if (!path) return;
+    text = await tauri.core.invoke("read_text_file", { path });
+  } else {
+    text = await new Promise((resolve) => {
+      const input = Object.assign(document.createElement("input"), { type: "file", accept: ".json,application/json" });
+      input.onchange = () => (input.files[0] ? input.files[0].text().then(resolve, () => resolve(null)) : resolve(null));
+      input.click();
+    });
+    if (text == null) return;
+  }
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { parsed = null; }
+  if (B.isEncrypted(parsed)) return showUnlockBackup(parsed);
+  if (!parsed || !Array.isArray(parsed.entries)) return alert("That file isn't a Point Tracker backup.");
+  return finishImport(parsed);
+}
+
+function showUnlockBackup(wrapper) {
+  overlay = { kind: "unlock-backup", wrapper };
+  showDialog(`<div class="form"><h2>Password Protected Backup</h2>
+      <div>Enter the password this backup was saved with.</div>
+      <input type="password" id="bk-unlock" autocomplete="current-password" placeholder="Password">
+      <div id="bk-status" class="sync-err" hidden></div></div>
+    <div class="dialog-actions"><span class="spacer"></span>
+      <button class="btn-subtle" data-action="close">Cancel</button>
+      <button class="btn-primary" data-action="import-unlock">${icon("lock-open")} Unlock</button></div>`);
+  const input = document.getElementById("bk-unlock");
+  input.focus();
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") unlockBackup(); });
+}
+
+async function unlockBackup() {
+  const wrapper = overlay?.wrapper, input = document.getElementById("bk-unlock");
+  const status = document.getElementById("bk-status"), go = document.querySelector('[data-action="import-unlock"]');
+  if (!wrapper || !input?.value) return;
+  go.setAttribute("disabled", "");
+  go.innerHTML = `${icon("loader-circle")} Unlocking…`; lucide.createIcons();
+  try {
+    const parsed = JSON.parse(await B.decrypt(wrapper, input.value));
+    closeOverlay();
+    await finishImport(parsed);
+  } catch (err) {
+    status.textContent = err.message === "wrong-password" ? "That password isn't right. Try again." : (err.message ?? String(err));
+    status.hidden = false;
+    go.removeAttribute("disabled");
+    go.innerHTML = `${icon("lock-open")} Unlock`; lucide.createIcons();
+    input.select();
+  }
+}
+
+/** Confirms, restores the backup's documents, and replaces all data with the backup's. */
+async function finishImport(imported) {
+  const count = (d) => [["entry", "entries"], ["reprimand", "reprimands"], ["leave", "leaves"]]
+    .map(([one, many], i) => { const n = [d.entries, d.reprimands, d.leaves][i]?.length ?? 0; return `${n} ${n === 1 ? one : many}`; })
+    .join(", ").replace(/, ([^,]*)$/, " and $1");
+  const ok = await ask(
+    `This replaces your current ${count(data)} with ${count(imported)} from the backup.`,
+    { title: "Replace all data?", okLabel: "Replace", danger: true });
   if (!ok) return;
+  for (const [file, b64] of Object.entries(imported.attachmentFiles ?? {})) {
+    if (!safeFileName(file) || typeof b64 !== "string") continue;
+    if (tauri) await tauri.core.invoke("restore_attachment", { file, dataBase64: b64 });
+    else await WS.putFile(file, new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: MIME[extOf(file)] ?? "" }));
+    thumbCache.delete(file);
+  }
+  delete imported.attachmentFiles;
   data = imported;
+  // Backups from any earlier version: fill in whatever they don't have yet.
   data.settings = { ...E.defaultSettings(), ...(data.settings ?? {}) };
-  data.entries ??= []; data.reprimands ??= [];
+  data.entries ??= [];
+  data.reprimands ??= [];
+  data.leaves ??= [];
+  data.deleted ??= {};
+  data.confirmations ??= {};
+  for (const k of ["dropOffs", "expirations", "leaveDismissed"]) data.confirmations[k] ??= [];
+  normalizeLeaves();
   save();
   startAutosave();
+  toast("circle-check", "Backup imported.");
 }
 // ---------- Nearby Sync ----------
 
@@ -2711,7 +2837,10 @@ document.addEventListener("click", (ev) => {
     case "submitted-now": overlay.entry.submittedAt = nowLocal(); renderEntryEditor(); break;
     case "confirm-drop": data.confirmations.dropOffs.push(t.dataset.key); save(); break;
     case "confirm-expiry": data.confirmations.expirations.push(t.dataset.key); save(); break;
-    case "export": closeOverlay(); exportBackup().catch((err) => alert(err)); break;
+    case "export": closeOverlay(); exportBackup(); break;
+    case "export-go": exportGo(); break;
+    case "export-save": exportSaveWeb(); break;
+    case "import-unlock": unlockBackup(); break;
     case "import": closeOverlay(); importBackup().catch((err) => alert(`Couldn't import: ${err}`)); break;
     case "reset-sample":
       loadSample().then((d) => {

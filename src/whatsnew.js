@@ -8,6 +8,20 @@
 
 export const NOTES = [
   {
+    version: "1.8.2",
+    features: [
+      {
+        icon: "lock", color: "green", title: "Password-Protected Backups",
+        text: "Backups can now be locked with a password. The whole file, including your leave details and documents, is encrypted before it's saved, and it can't be opened without the password. It's on by default when you export.",
+      },
+    ],
+    also: [
+      "Export explains what a backup holds, so it doesn't get shared by mistake.",
+      "Tighter security inside the app: it only runs its own code and only connects where Nearby Sync needs to.",
+      "Importing a backup from before Leaves existed no longer causes problems.",
+    ],
+  },
+  {
     version: "1.8.1",
     features: [
       {

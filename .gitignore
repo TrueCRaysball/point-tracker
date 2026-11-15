@@ -9,6 +9,7 @@ src-tauri/tauri.build.conf.json
 src/sw.js
 src/version.json
 src/app-version.js
+src/vendor/viewer/heic-frame.html
 
 # Local-only settings
 local.config.json

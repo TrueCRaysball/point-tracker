@@ -204,57 +204,8 @@ fn delete_attachment(app: AppHandle, file: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Every attachment file name referenced by entries and reprimands.
-fn referenced_files(data: &serde_json::Value) -> Vec<String> {
-    let mut files = Vec::new();
-    for list in ["entries", "reprimands", "leaves"] {
-        for item in data[list].as_array().into_iter().flatten() {
-            for att in item["attachments"].as_array().into_iter().flatten() {
-                if let Some(f) = att["file"].as_str() {
-                    files.push(f.to_string());
-                }
-            }
-        }
-    }
-    files
-}
-
-/// Writes a backup that also carries the attachment files (base64), so it's complete on its own.
-#[tauri::command]
-fn export_backup(app: AppHandle, path: String, json: String) -> Result<(), String> {
-    use base64::Engine;
-    let mut data: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
-    let mut files = serde_json::Map::new();
-    for file in referenced_files(&data) {
-        if let Ok(bytes) = fs::read(attachment_path(&app, &file)?) {
-            files.insert(file, base64::engine::general_purpose::STANDARD.encode(bytes).into());
-        }
-    }
-    data["attachmentFiles"] = files.into();
-    let out = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
-    fs::write(path, out).map_err(|e| e.to_string())
-}
-
-/// Reads a backup, restores any attachment files it carries, and returns the data JSON.
-#[tauri::command]
-fn import_backup(app: AppHandle, path: String) -> Result<String, String> {
-    use base64::Engine;
-    let text = fs::read_to_string(path).map_err(|e| e.to_string())?;
-    let mut data: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-    if let Some(files) = data.get("attachmentFiles").and_then(|f| f.as_object()) {
-        for (file, b64) in files {
-            let bytes = base64::engine::general_purpose::STANDARD
-                .decode(b64.as_str().unwrap_or(""))
-                .map_err(|e| e.to_string())?;
-            fs::write(attachment_path(&app, file)?, bytes).map_err(|e| e.to_string())?;
-        }
-    }
-    if let Some(obj) = data.as_object_mut() {
-        obj.remove("attachmentFiles");
-    }
-    serde_json::to_string(&data).map_err(|e| e.to_string())
-}
-
+// Backups are built (and encrypted, if a password is set) in src/backup.js and app.js, the same on
+// desktop and phone. These two only move the finished text to and from the file the user picked.
 #[tauri::command]
 fn write_text_file(path: String, contents: String) -> Result<(), String> {
     fs::write(path, contents).map_err(|e| e.to_string())
@@ -362,8 +313,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             load_data, save_data, write_text_file, read_text_file, app_info,
             import_attachment, save_attachment_bytes, read_attachment, read_attachment_bytes,
-            attachment_exists, open_attachment, delete_attachment, restore_attachment,
-            export_backup, import_backup
+            attachment_exists, open_attachment, delete_attachment, restore_attachment
         ])
         .run(tauri::generate_context!())
         .expect("error while running Point Tracker");

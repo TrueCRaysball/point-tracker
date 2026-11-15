@@ -965,6 +965,13 @@ body:not(.mobile) .cards > .wcard { flex: 1 0 190px; scroll-snap-align: start; }
 .sync-device svg { color: var(--blue); }
 .sync-line { padding: 2px 12px 4px; font-size: 13px; }
 .sync-line > span, #sync-pair-status, #sync-join-status { display: inline-flex; align-items: center; gap: 7px; }
+.backup-warn { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.45;
+  background: color-mix(in srgb, var(--amber) 12%, transparent); border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent); }
+.backup-warn svg { flex: none; color: var(--amber); width: 18px; height: 18px; margin-top: 1px; }
+.backup-check { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; line-height: 1.4; }
+.backup-check input { margin-top: 3px; }
+.group > .field input[type="password"] { width: 220px; }
+.sync-err[hidden], .note[hidden], .group[hidden] { display: none; }
 .sync-err { color: var(--red); display: inline-flex; align-items: center; gap: 7px; }
 .sync-ok { color: var(--green); display: inline-flex; align-items: center; gap: 7px; font-weight: 600; }
 svg.lucide-loader-circle { animation: spin 0.9s linear infinite; }

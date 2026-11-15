@@ -27,7 +27,7 @@
 - **Updates install themselves (desktop, from 1.8.0):** the app checks for a new version when it opens and every 15 minutes. Click **Install Update** and it downloads, installs and restarts, on Mac, Windows and the Linux AppImage. Linux `.deb` and `.rpm` installs get a notice instead, since the package manager handles those. The phone version updates itself.
 - **Phone version:** a Home Screen web app with a phone-friendly layout that works offline (see [On your phone](#on-your-phone)).
 - **Getting started:** a welcome screen, a guided tour you can take again any time, and a What's New screen after each update.
-- **Your data stays on your device.** It saves automatically, and you can export and import backups.
+- **Your data stays on your device.** It saves automatically, and you can export and import backups. Backups can be **password protected** (on by default): the whole file is encrypted before it's saved.
 - **Make it yours:** light, dark or system theme; call-ins and reprimands as tabs or side by side; and every rule (thresholds, windows, points per call type, occurrence limits, reprimand length) can be changed in Settings.
 
 ## Download
@@ -82,7 +82,13 @@ Your data saves automatically to a single `data.json` file:
 
 On the phone version, data is kept in the browser's storage for the Home Screen app. Removing the app from your Home Screen (or clearing Safari's website data) deletes it, so export a backup first.
 
-To keep a backup or move your data to another device, use **Settings → Data → Export Backup / Import Backup**.
+To keep a backup or move your data to another device, use **Settings → Data → Export / Import**. A backup is one `.json` file holding every record and every attached document, so treat it like the records themselves: keep it private and don't attach it to bug reports.
+
+**Password-protected backups** (the default) are encrypted on the device before they're saved ([`src/backup.js`](src/backup.js)):
+- The key comes from the password with PBKDF2-SHA256 (600,000 rounds and a random salt), and the file is encrypted with AES-256-GCM.
+- A wrong password, or a file that's been changed, fails to open instead of giving garbage.
+- There's no way to recover a forgotten password.
+- Backups made on the desktop open on the phone and the other way round. Older, unprotected backups still import.
 
 ### How Nearby Sync works
 
@@ -120,6 +126,8 @@ Check the draft, then publish it; installed apps see the update once it's publis
 - Every build stamps a **build number** from the build time (`YYMMDDHHmm`), shown in **About Point Tracker**.
 - The **stage label** ("Beta") is `STAGE` in `src/whatsnew.js`. It's shown with every version number ("Beta 1.8.0"), while the version itself stays a plain number. Set it to `""` when the beta is over.
 - **What's New** notes go in `src/whatsnew.js`, one entry per version.
+
+**Security policy:** `src/index.html` sets a Content Security Policy for both the desktop and phone versions: only the app's own files run, and the only outside connection is Nearby Sync's PeerJS server. It's a `<meta>` tag rather than `app.security.csp` in `tauri.conf.json`, because that setting would also cover the HEIC converter's page. That page, `vendor/viewer/heic-frame.html`, is built by `scripts/vendor.mjs`. Its converter needs `eval`, so it runs in a sandboxed frame with its own policy and no access to the app, its storage or the network.
 
 **Optional settings:** create a `local.config.json` (it's ignored by git) to change where local builds go, for example:
 

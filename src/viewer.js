@@ -403,12 +403,45 @@ async function convertImage(blob, ext) {
     }
     return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
   }
-  if (ext === "heic" || ext === "heif") {
-    const heic2any = await loadScript("vendor/viewer/heic2any.min.js", "heic2any");
-    const out = await heic2any({ blob, toType: "image/jpeg", quality: 0.92 });
-    return Array.isArray(out) ? out[0] : out;
-  }
+  if (ext === "heic" || ext === "heif") return heicToJpeg(blob);
   throw new Error("Unsupported image.");
+}
+
+// HEIC goes through a sandboxed frame (vendor/viewer/heic-frame.html, made by scripts/vendor.mjs): its
+// converter needs to build code at run time, which the app's security policy doesn't allow. The frame
+// can't reach the app, storage or network.
+let heicFrame = null; // Promise of the frame's window
+let heicSeq = 0;
+function heicWindow() {
+  heicFrame ??= new Promise((resolve, reject) => {
+    const frame = Object.assign(document.createElement("iframe"), { src: "vendor/viewer/heic-frame.html", hidden: true });
+    frame.setAttribute("sandbox", "allow-scripts");
+    const t = setTimeout(() => { cleanup(); reject(new Error("The HEIC converter didn't load.")); }, 20000);
+    const onReady = (e) => {
+      if (e.source !== frame.contentWindow || !e.data?.ready) return;
+      clearTimeout(t); removeEventListener("message", onReady); resolve(frame.contentWindow);
+    };
+    const cleanup = () => { removeEventListener("message", onReady); frame.remove(); heicFrame = null; };
+    addEventListener("message", onReady);
+    document.body.append(frame);
+  });
+  return heicFrame;
+}
+async function heicToJpeg(blob) {
+  const win = await heicWindow();
+  const id = ++heicSeq;
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => { removeEventListener("message", onMsg); reject(new Error("The HEIC photo took too long.")); }, 60000);
+    function onMsg(e) {
+      if (e.source !== win || e.data?.id !== id) return;
+      clearTimeout(t);
+      removeEventListener("message", onMsg);
+      if (e.data.blob instanceof Blob) resolve(e.data.blob);
+      else reject(new Error(e.data.error || "Couldn't convert the photo."));
+    }
+    addEventListener("message", onMsg);
+    win.postMessage({ id, blob }, "*");
+  });
 }
 
 async function media(tag, blob, { view, body, opts }) {
