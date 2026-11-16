@@ -8,13 +8,6 @@
 
 export const NOTES = [
   {
-    version: "2.3.1",
-    also: [
-      "A new Point Tracker wordmark in the header, on the computer and the phone.",
-      "The sidebar shows the version and build number under Settings and About.",
-    ],
-  },
-  {
     version: "2.3.0",
     features: [
       {
@@ -23,7 +16,8 @@ export const NOTES = [
       },
     ],
     also: [
-      "Settings and About sit at the bottom of the sidebar, with the logo and version underneath.",
+      "A new Point Tracker wordmark in the header, on the computer and the phone.",
+      "Settings and About sit at the bottom of the sidebar, with the logo, version and build number underneath.",
       "The reprimand countdown shows the percentage remaining again, and its icon changes with how many are in effect.",
     ],
   },

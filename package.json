@@ -1,7 +1,7 @@
 {
   "name": "point-tracker",
   "private": true,
-  "version": "2.3.1",
+  "version": "2.3.0",
   "scripts": {
     "tauri": "tauri",
     "vendor": "node scripts/vendor.mjs",
