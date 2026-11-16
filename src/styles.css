@@ -1649,3 +1649,78 @@ body .dots .dot.on {
     linear-gradient(180deg, rgba(120, 180, 255, 0.55) 0%, rgba(30, 60, 120, 0.10) 20%, rgba(30, 60, 120, 0.08) 65%, rgba(60, 140, 255, 0.8) 100%) border-box;
 }
 .sidebar button svg { width: 30px; height: 30px; }
+
+/* ==========================================================================
+   Sidebar sections: pages at the top, Settings and About at the bottom, then the logo and version over
+   the glow. The groups aren't positioned, so the gliding tile still measures from the sidebar itself.
+   ========================================================================== */
+.sidebar { gap: 0; padding-bottom: 12px; }
+.sb-group { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.sb-div { width: 36px; border: 0; border-top: 1px solid rgba(var(--ink), 0.14); margin: 14px 0; flex: none; }
+.sb-fill { flex: 1; min-height: 8px; }
+.sb-brand { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 16px; position: relative; z-index: 1; }
+.sb-brand img { width: 40px; height: auto; filter: drop-shadow(0 4px 12px rgba(40, 140, 255, 0.55)); }
+.sb-brand span { font: 600 9.5px var(--font-head); color: var(--text2); text-align: center; line-height: 1.2; letter-spacing: 0.02em; }
+
+/* ==========================================================================
+   Call-ins and Reprimands pages (desktop).
+   ========================================================================== */
+.page-callins, .page-reprimands { overflow-y: auto; }
+.page-callins > *, .page-reprimands > * { flex-shrink: 0; }
+.page-callins > .logs, .page-reprimands > .logs { flex-shrink: 1; min-height: 300px; }
+.page-head { display: flex; align-items: center; gap: 14px; }
+.page-head .page-title { font-size: 24px; }
+.ph-icon {
+  flex: none; width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; color: #fff;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--c) 60%, white), var(--c) 55%, color-mix(in srgb, var(--c) 80%, black));
+  box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--c) 70%, transparent);
+}
+.ph-icon svg { width: 24px; height: 24px; }
+.ph-actions { display: flex; gap: 8px; align-items: center; }
+.page-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.page-stats .stat-tile { padding: 14px 16px; }
+.rules-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.rules-panel ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; line-height: 1.45; }
+.rules-panel li::marker { color: var(--blue); }
+.rules-note { display: flex; align-items: center; gap: 6px; font-size: 12.5px; margin-top: auto; }
+.rules-note svg { width: 14px; height: 14px; }
+/* Short windows (laptops, Linux with a taskbar): tighter spacing, and the logo footer gives way (the logo
+   is in the header anyway), so every button still fits. */
+@media (max-height: 820px) {
+  .sb-group { gap: 4px; }
+  .sb-div { margin: 8px 0; }
+  .sb-brand { display: none; }
+  .sidebar { padding-top: 14px; }
+}
+.rh-pct { margin-top: 4px; font: 600 12.5px var(--font-head); color: var(--text2); }
+.pi.green { color: var(--green); }
+.pi.yellow { color: var(--yellow); } .pi.orange { color: var(--orange); }
+@keyframes pi-flash { 50% { opacity: 0.25; } }
+.pi-flash { animation: pi-flash 1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .pi-flash { animation: none; } }
+
+/* Call-ins page: stat tiles (2×2) beside Work Points Progress as meters. */
+.ci-top { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: 14px; }
+.ci-top .page-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: stretch; }
+.wmeters { display: flex; flex-direction: column; gap: 12px; }
+.wm-row { display: grid; grid-template-columns: 112px minmax(0, 1fr) 64px; grid-template-areas: "label bar count" "label note note"; column-gap: 14px; row-gap: 3px; align-items: center; }
+.wm-label { grid-area: label; display: flex; flex-direction: column; line-height: 1.25; }
+.wm-label b { font: 700 15px var(--font-head); }
+.wm-label .muted { font-size: 12px; }
+.wm-bar {
+  grid-area: bar; position: relative; height: 14px; border-radius: 999px; overflow: hidden;
+  background: rgba(var(--ink), 0.08); border: 1px solid rgba(var(--ink), 0.10);
+}
+/* A notch at each point up to the threshold. */
+.wm-bar::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0, transparent calc(100% / var(--notches) - 2px), color-mix(in srgb, var(--bg) 70%, transparent) calc(100% / var(--notches) - 2px), color-mix(in srgb, var(--bg) 70%, transparent) calc(100% / var(--notches)));
+}
+.wm-fill {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0) 60%), linear-gradient(90deg, color-mix(in srgb, var(--c) 55%, white), var(--c));
+  box-shadow: 0 0 12px -2px color-mix(in srgb, var(--c) 70%, transparent);
+}
+.wm-count { grid-area: count; font-size: 18px; text-align: right; white-space: nowrap; }
+.wm-count small { font-size: 13px; color: var(--text2); }
+.wm-note { grid-area: note; font-size: 12.5px; }

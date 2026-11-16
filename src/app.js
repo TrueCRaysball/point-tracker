@@ -401,6 +401,8 @@ function tourSteps() {
     { target: q('[data-action="add-entry"]'), title: "Add Entry", text: "Log a call-in, a shift you picked up or worked, or another change. Points are worked out for you." },
     { target: q(".datenav"), title: "Look ahead or back", text: "Change the date to see where you'll stand on any day. Handy for checking when points drop off." },
     { target: nav("calendar"), title: "Calendar", text: "A month view of your call-ins, reprimands and leaves." },
+    { target: nav("callins"), title: "Call-ins", text: "Every call-in on its own page, with this year's numbers: call-ins, occurrences, points, and days since the last one." },
+    { target: nav("reprimands"), title: "Reprimands", text: "Your reprimands, when they expire, and a plain summary of the rules that earn them." },
     { target: nav("leaves"), title: "Leaves", text: "Medical, personal, parental, bereavement or any other leave: keep each one's details, timeline, notes, upcoming dates and documents together." },
     { target: nav("settings"), title: "Settings", text: "Adjust thresholds and point values, back up your data, and turn on <b>Nearby Sync</b> to keep your phone and computer in step." },
     done,
@@ -1034,7 +1036,8 @@ function render() {
   document.body.classList.toggle("mobile", isMobile());
   if (isMobile()) return renderMobile(ev);
   const body = ui.page === "calendar" ? calendarPage(ev) : ui.page === "settings" ? settingsPage()
-    : ui.page === "leaves" ? leavesPage(ev) : overviewPage(ev);
+    : ui.page === "leaves" ? leavesPage(ev) : ui.page === "callins" ? callinsPage(ev)
+    : ui.page === "reprimands" ? reprimandsPage(ev) : overviewPage(ev);
   // A page change (not an ordinary refresh) fades the new page in as it rises into place.
   const entering = lastPage !== null && lastPage !== ui.page;
   lastPage = ui.page;
@@ -1105,13 +1108,19 @@ function expandedTable(ev) {
   </div>`;
 }
 
-const NAV = [["overview", "house", "Home"], ["calendar", "calendar-days", "Calendar"], ["leaves", "pt-leave", "Leaves"], ["settings", "settings", "Settings"]];
+const NAV = [["overview", "house", "Home"], ["calendar", "calendar-days", "Calendar"], ["callins", "phone", "Call-ins"], ["reprimands", "gavel", "Reprimands"], ["leaves", "pt-leave", "Leaves"]];
 /** Desktop navigation: a slim glass column of icons; each page's name appears beside its icon on hover. */
 const SIDEBAR_WIDTH = 86;
 let lastPage = null;
+let appVer = null; // filled in once at startup (see the end of this file), for the sidebar's footer
 function sidebar() {
+  const pageBtn = ([id, ic, label]) => `<button class="${ui.page === id ? "on" : ""}" data-action="page" data-page="${id}" aria-label="${label}">${icon(ic)}<span class="sb-tip" aria-hidden="true">${label}</span></button>`;
   return `<nav class="sidebar" aria-label="Pages"><span class="sb-ind" aria-hidden="true"></span>
-    ${NAV.map(([id, ic, label]) => `<button class="${ui.page === id ? "on" : ""}" data-action="page" data-page="${id}" aria-label="${label}">${icon(ic)}<span class="sb-tip" aria-hidden="true">${label}</span></button>`).join("")}
+    <div class="sb-group">${NAV.map(pageBtn).join("")}</div>
+    <hr class="sb-div"><span class="sb-fill"></span><hr class="sb-div">
+    <div class="sb-group">${pageBtn(["settings", "settings", "Settings"])}
+      <button data-action="about" aria-label="About Point Tracker">${icon("info")}<span class="sb-tip" aria-hidden="true">About</span></button></div>
+    <div class="sb-brand"><img src="vendor/logo.png" alt="" draggable="false"><span id="sb-ver">${appVer ? esc(W.versionName(appVer)) : ""}</span></div>
   </nav>`;
 }
 
@@ -1235,6 +1244,90 @@ function windowCard(w, asOfDay, { compact = false } = {}) {
   </div>`;
 }
 
+/** A stat tile: a gradient icon badge, a big number and a label (optionally a small line, and clickable). */
+function statTile(ic, color, value, label, sub = "", action = "") {
+  return `<${action ? `button data-action="${action}"` : "div"} class="stat-tile c-${color}"><span class="st-icon">${icon(ic)}</span>
+      <span class="st-text"><span class="st-value">${value}</span><span class="st-label">${label}</span>${sub ? `<span class="st-sub">${sub}</span>` : ""}</span>
+    </${action ? "button" : "div"}>`;
+}
+
+/** Title row for a desktop page: icon, title, a short line, then the page's own buttons on the right. */
+const pageHead = (ic, color, title, sub, actions = "") => `
+  <div class="page-head"><span class="ph-icon c-${color}">${icon(ic)}</span>
+    <div><h2 class="page-title">${title}</h2><div class="muted">${sub}</div></div>
+    <span class="spacer"></span><div class="ph-actions">${actions}</div></div>`;
+
+/** Desktop Call-ins page: this year's numbers, then the full call-ins table with room to breathe. */
+function callinsPage(ev) {
+  const longest = ev.windows.at(-1), days = longest?.rule.days ?? 365, since = longest?.since ?? ev.asOf - 364;
+  const inWindow = ev.entries.filter((e) => { const d = Day.parse(e.date); return d >= since && d <= ev.asOf; });
+  const calls = inWindow.filter((e) => e.type === "callSick" || e.type === "callPersonal");
+  const occurrences = calls.filter((e) => e.type === "callPersonal" || ev.evals.get(e.id)?.stringPosition === 1).length;
+  const sick = calls.filter((e) => e.type === "callSick").length;
+  const pts = longest ? longest.eligible + longest.neutralized : 0;
+  const last = calls.at(-1);
+  return `
+    ${pageHead("phone", "blue", "Call-ins", `Every call-in you've logged. Numbers below cover the last ${days} days.`, addEntryBtn() + filterBtn() + moreBtn())}
+    <div class="ci-top">
+    <div class="page-stats">
+      ${statTile("phone", "blue", String(calls.length), "Call-ins", `${sick} sick · ${calls.length - sick} personal`)}
+      ${statTile("repeat", "purple", String(occurrences), "Occurrences", "Back-to-back sick days count once")}
+      ${statTile("layers", "amber", E.fmtPts(pts), "Points", longest?.neutralized ? `${E.fmtPts(longest.neutralized)} used in reprimands` : "Including any used in reprimands")}
+      ${last ? statTile("calendar-check", "green", String(ev.asOf - Day.parse(last.date)), "Days since last call-in", Day.short(Day.parse(last.date)))
+        : statTile("calendar-check", "green", "—", "No call-ins yet")}
+    </div>
+    ${windowMeters(ev)}
+    </div>
+    <div class="logs"><div class="panel log" style="flex:1">${entriesTable(ev)}</div></div>`;
+}
+
+/**
+ * Work Points Progress as meters (Call-ins page; Home shows the same windows as ring cards): one row per
+ * window with a bar notched at each point up to its threshold, filled in the window's severity color.
+ */
+function windowMeters(ev) {
+  const longest = ev.windows.at(-1);
+  const rows = ev.windows.map((w) => {
+    const sev = E.severity(w.rule, w.eligible), t = w.rule.threshold;
+    const frac = t > 0 ? Math.min(1, w.eligible / t) : 0;
+    const right = w.earned ? `<b class="red">Reprimand earned</b>`
+      : `<span>${pts(w.remaining)} to go</span>${w.oldest ? `<span class="muted"> · next drop-off ${Day.short(w.dropsOff)} (${E.relative(w.dropsOff, ev.asOf)})</span>` : `<span class="muted"> · no active points</span>`}`;
+    return `
+      <div class="wm-row c-${sev}">
+        <div class="wm-label"><b>${w.rule.days} days</b><span class="muted">since ${Day.short(w.since)}</span></div>
+        <div class="wm-bar" style="--notches:${Math.max(1, Math.round(t))}"><div class="wm-fill" style="width:${frac * 100}%"></div></div>
+        <div class="wm-count num">${E.fmtPts(w.eligible)}<small> / ${E.fmtPts(t)}</small></div>
+        <div class="wm-note">${right}</div>
+      </div>`;
+  }).join("");
+  return `
+  <div class="panel wmeters">
+    <div class="panel-title"><span class="pi blue">${icon("chart-column")}</span> Work Points Progress
+      ${longest ? `<span class="muted" style="font-size:14px;font-weight:400">Since ${Day.short(longest.since)}</span>` : ""}</div>
+    ${rows}
+  </div>`;
+}
+
+/** Desktop Reprimands page: status (same card as Home), how the rules work, then every reprimand. */
+function reprimandsPage(ev) {
+  const s = ev.settings;
+  const rules = E.sortedRules(s).map((r) => `<li><b>${E.fmtPts(r.threshold)} points</b> in ${r.days} days earns a reprimand</li>`).join("");
+  return `
+    ${pageHead("gavel", "red", "Reprimands", "Reprimands you've signed, when they expire, and how close you are to termination.", recordBtn())}
+    <div class="top">
+      ${reprimandHero(ev)}
+      <div class="panel rules-panel">
+        <div class="panel-title"><span class="pi blue">${icon("book-open")}</span> How reprimands work</div>
+        <ul>${rules}
+          <li>Each reprimand lasts <b>${s.reprimandMonths} months</b> from the day it's signed.</li>
+          <li>One signed while others are in effect joins them, and they all expire together with the newest.</li>
+          <li><b>${s.terminationAt}</b> in effect at once means termination.</li></ul>
+        <div class="muted rules-note">${icon("settings")} These follow your settings in Settings → Attendance Rules.</div>
+      </div>
+    </div>
+    <div class="logs"><div class="panel log" style="flex:1">${reprimandsTable(ev, true)}</div></div>`;
+}
+
 /**
  * Desktop Home: reprimands and a few headline numbers in one card, with nothing repeated elsewhere on Home:
  * a ring counting down to when the current reprimands expire, three stat tiles (days completed of that
@@ -1246,10 +1339,7 @@ function reprimandHero(ev) {
   const msg = count >= limit
     ? [`Termination threshold reached.`, `${count} reprimands are in effect.`]
     : [`Termination at ${limit} reprimands.`, count === limit - 1 ? "The next reprimand ends employment." : `${limit - 1 - count} more before the final warning.`];
-  const tile = (ic, color, value, label, sub = "", action = "") =>
-    `<${action ? `button data-action="${action}"` : "div"} class="stat-tile c-${color}"><span class="st-icon">${icon(ic)}</span>
-      <span class="st-text"><span class="st-value">${value}</span><span class="st-label">${label}</span>${sub ? `<span class="st-sub">${sub}</span>` : ""}</span>
-    </${action ? "button" : "div"}>`;
+  const tile = statTile;
 
   // 1. The current reprimand period.
   let ringPart, periodTile;
@@ -1257,7 +1347,8 @@ function reprimandHero(ev) {
     const left = g.expires - ev.asOf, total = Math.max(1, g.expires - g.latestSigned);
     const dayN = Math.min(total, ev.asOf - g.latestSigned + 1);
     ringPart = `<div class="ring rh-ring">${ring(dayN / total)}
-      <div class="label"><div class="rh-days">${left}</div><div class="rh-unit">${left === 1 ? "day" : "days"}</div><div class="muted rh-cap">until they expire</div></div></div>`;
+      <div class="label"><div class="rh-days">${left}</div><div class="rh-unit">${left === 1 ? "day left" : "days left"}</div>
+        <div class="rh-pct">${Math.round((left / total) * 100)}% remaining</div></div></div>`;
     periodTile = tile("circle-check", "green", `${dayN}<small> / ${total}</small>`, "Days completed",
       `${g.reprimands.length > 1 ? "All expire" : "Expires"} ${Day.short(g.expires)}`, "expire-details");
   } else {
@@ -1276,10 +1367,18 @@ function reprimandHero(ev) {
     ? tile("calendar-check", "blue", since === 0 ? "Today" : String(since), since === 0 ? "Last call-in" : since === 1 ? "Day since last call-in" : "Days since last call-in", Day.short(Day.parse(lastCall.date)))
     : tile("calendar-check", "blue", "—", "No call-ins yet");
 
+  // Beside the count, by how many are in effect (with the usual limit of 4): 0 a green check, 1 a yellow
+  // gavel, 2 an orange caution, 3 a red caution, 4 (the limit) a flashing red caution. Counted back from
+  // the limit, so a different limit still lines up.
+  const countIcon = count === 0 ? `<span class="pi green" title="No reprimands in effect">${icon("circle-check")}</span>`
+    : count >= limit ? `<span class="pi red pi-flash" title="Termination threshold reached">${icon("triangle-alert")}</span>`
+    : count === limit - 1 ? `<span class="pi red" title="One away from the limit">${icon("triangle-alert")}</span>`
+    : count === limit - 2 ? `<span class="pi orange" title="Two away from the limit">${icon("triangle-alert")}</span>`
+    : `<span class="pi yellow" title="${count} in effect">${icon("gavel")}</span>`;
   return `
   <div class="panel rep-hero ${danger ? "c-red" : "c-blue"}">
     <div class="rh-top">${ringPart}<div class="rh-tiles">${periodTile}${ptsTile}${callTile}</div></div>
-    <div class="rh-count"><span class="pi ${danger ? "red" : "blue"}">${icon("triangle-alert")}</span>
+    <div class="rh-count">${countIcon}
       <span class="num"><span class="${danger ? "red" : ""}">${count}</span> / ${limit}</span><span class="rh-label">Reprimands in effect</span>
       <span class="spacer"></span><div class="dots">${Array.from({ length: limit }, (_, i) => `<div class="dot ${i < count ? "on" : ""}"></div>`).join("")}</div></div>
     <div class="rep-warn ${danger ? "danger" : ""}">${icon(danger ? "triangle-alert" : "info")}
@@ -3281,4 +3380,5 @@ startAutosave();
 lastSide = sideBySide();
 initSync();
 if (tauri) setupDesktopUpdates();
+appVersion().then((v) => { appVer = v; const el = document.getElementById("sb-ver"); if (el) el.textContent = W.versionName(v); }).catch(() => {});
 maybeShowIntro().then((shown) => { if (!shown) maybeShowWhatsNew(); });

@@ -8,6 +8,19 @@
 
 export const NOTES = [
   {
+    version: "2.3.0",
+    features: [
+      {
+        icon: "phone", color: "blue", title: "Call-ins and Reprimands Pages",
+        text: "Both now have their own page in the sidebar. Call-ins shows the full list with this year's numbers (call-ins, occurrences, points, days since the last one) and each points window as a meter with its next drop-off. Reprimands shows your status, a plain summary of the rules, and every reprimand you've signed.",
+      },
+    ],
+    also: [
+      "Settings and About sit at the bottom of the sidebar, with the logo and version underneath.",
+      "The reprimand countdown shows the percentage remaining again, and its icon changes with how many are in effect.",
+    ],
+  },
+  {
     version: "2.2.0",
     features: [
       {
