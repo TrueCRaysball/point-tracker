@@ -8,6 +8,19 @@
 
 export const NOTES = [
   {
+    version: "2.2.0",
+    features: [
+      {
+        icon: "layout-dashboard", color: "blue", title: "A New Home Layout",
+        text: "On the computer, the pages move to a slim glass sidebar on the left (hover over an icon to see its name). Home now leads with one card for reprimands: a countdown to when they expire, how many are in effect and how close you are to termination, plus quick numbers for days completed, total points and days since your last call-in. Beside it, Work Points Progress shows each window with the date the next point drops off.",
+      },
+    ],
+    also: [
+      "The reprimand markers are now slanted glass bars that glow red as reprimands add up.",
+      "The progress rings, leave timeline and page dots now use the same gradients as the rest of the app.",
+    ],
+  },
+  {
     version: "2.1.0",
     features: [
       {

@@ -392,12 +392,11 @@ function tourSteps() {
       done,
     ];
   }
-  const nav = (page) => q(`.nav [data-page="${page}"]`);
+  const nav = (page) => q(`.sidebar [data-page="${page}"]`);
   return [
     intro,
-    { target: q(".panel.workpoints"), title: "Work Points Progress", text: "Each card is a rolling window (like 30 or 90 days). The ring shows your points against the limit that earns a reprimand, and when your oldest point drops off." },
-    { target: panel("Attendance Reprimands"), title: "Attendance Reprimands", text: "How many reprimands are in effect, and how many more before termination." },
-    { target: panel("Reprimands Expire"), title: "Reprimands Expire", text: "When your current reprimands expire, with a countdown." },
+    { target: q(".panel.workpoints"), title: "Work Points Progress", text: "Each card is a rolling window (like 30 or 90 days). The ring shows your points against the limit that earns a reprimand, and when the next point drops off." },
+    { target: q(".rep-hero"), title: "Reprimands at a glance", text: "A countdown to when your reprimands expire, a few key numbers, how many reprimands are in effect, and how many more before termination." },
     { target: q(".panel.log"), title: "Call-ins and reprimands", text: "Everything you've logged. Click a row for details, or double-click to edit it." },
     { target: q('[data-action="add-entry"]'), title: "Add Entry", text: "Log a call-in, a shift you picked up or worked, or another change. Points are worked out for you." },
     { target: q(".datenav"), title: "Look ahead or back", text: "Change the date to see where you'll stand on any day. Handy for checking when points drop off." },
@@ -1001,7 +1000,7 @@ function sideBySide() {
   const mode = pref(STORE.layout, "adaptive");
   if (mode === "tabs") return false;
   if (mode === "sideBySide") return true;
-  return document.getElementById("app").clientWidth - 40 >= SIDE_BY_SIDE_WIDTH;
+  return document.getElementById("app").clientWidth - 40 - SIDEBAR_WIDTH >= SIDE_BY_SIDE_WIDTH;
 }
 
 function thresholdText(r, s) {
@@ -1036,7 +1035,11 @@ function render() {
   if (isMobile()) return renderMobile(ev);
   const body = ui.page === "calendar" ? calendarPage(ev) : ui.page === "settings" ? settingsPage()
     : ui.page === "leaves" ? leavesPage(ev) : overviewPage(ev);
-  document.getElementById("app").innerHTML = `${hero()}<main class="page page-${ui.page}">${body}</main>${footer()}${ui.expanded ? expandedTable(ev) : ""}`;
+  // A page change (not an ordinary refresh) fades the new page in as it rises into place.
+  const entering = lastPage !== null && lastPage !== ui.page;
+  lastPage = ui.page;
+  document.getElementById("app").innerHTML = `${hero()}<div class="shell">${sidebar()}<main class="page page-${ui.page}${entering ? " page-enter" : ""}">${body}</main></div>${footer()}${ui.expanded ? expandedTable(ev) : ""}`;
+  placeNavIndicator();
   lucide.createIcons();
   updateRepExpand();
   hydrateThumbs(document.getElementById("app"));
@@ -1062,8 +1065,8 @@ function overviewPage(ev) {
   const repsHead = `<span class="panel-title"><span class="pi">${icon("gavel")}</span> Reprimands</span><span class="spacer"></span>${recordBtn()}${repExpandBtn()}`;
   return `
     <div class="top">
-      ${workPoints(ev)}
-      <div class="right-col">${reprimandCount(ev)}${reprimandExpire(ev)}</div>
+      ${reprimandHero(ev)}
+      ${workPoints(ev, { compact: true })}
     </div>
     ${banners(ev)}
     ${side ? `
@@ -1102,9 +1105,37 @@ function expandedTable(ev) {
   </div>`;
 }
 
+const NAV = [["overview", "house", "Home"], ["calendar", "calendar-days", "Calendar"], ["leaves", "pt-leave", "Leaves"], ["settings", "settings", "Settings"]];
+/** Desktop navigation: a slim glass column of icons; each page's name appears beside its icon on hover. */
+const SIDEBAR_WIDTH = 86;
+let lastPage = null;
+function sidebar() {
+  return `<nav class="sidebar" aria-label="Pages"><span class="sb-ind" aria-hidden="true"></span>
+    ${NAV.map(([id, ic, label]) => `<button class="${ui.page === id ? "on" : ""}" data-action="page" data-page="${id}" aria-label="${label}">${icon(ic)}<span class="sb-tip" aria-hidden="true">${label}</span></button>`).join("")}
+  </nav>`;
+}
+
+/**
+ * The blue tile behind the current page's icon is its own layer, so it can glide to a newly chosen page:
+ * it's drawn where it was, then moved to the new icon. On resize it just jumps into place.
+ */
+let navIndY = null;
+function placeNavIndicator({ animate = true } = {}) {
+  const nav = document.querySelector(".sidebar"), ind = nav?.querySelector(".sb-ind"), on = nav?.querySelector("button.on");
+  if (!ind || !on) return;
+  const y = on.offsetTop;
+  ind.style.transition = "none";
+  ind.style.transform = `translateY(${animate && navIndY !== null ? navIndY : y}px)`;
+  if (animate && navIndY !== null && navIndY !== y) {
+    void ind.offsetHeight; // apply the old position before moving
+    ind.style.transition = "";
+    ind.style.transform = `translateY(${y}px)`;
+  }
+  navIndY = y;
+}
+
 function hero() {
   const over = ui.asOverride !== null;
-  const nav = [["overview", "house", "Home"], ["calendar", "calendar-days", "Calendar"], ["leaves", "pt-leave", "Leaves"], ["settings", "settings", "Settings"]];
   return `
   <div class="hero" data-tauri-drag-region>
     <div class="hero-art" data-tauri-drag-region></div>
@@ -1125,9 +1156,6 @@ function hero() {
       </div>
       ${ui.fullscreen ? `<button class="btn-subtle glass" data-action="exit-fullscreen">${icon("minimize-2")} Exit Full Screen</button>` : ""}
     </div>
-    <nav class="nav">
-      ${nav.map(([id, ic, label]) => `<button class="${ui.page === id ? "on" : ""}" data-action="page" data-page="${id}">${icon(ic)} ${label}</button>`).join("")}
-    </nav>
   </div>`;
 }
 
@@ -1153,25 +1181,33 @@ function footer() {
   </footer>`;
 }
 
+let ringSeq = 0;
+/** A progress ring. The arc runs from a light tint into the card's color (--c), with a soft glow (CSS). */
 function ring(fraction) {
-  const r = 50.5, c = 2 * Math.PI * r, f = Math.max(0.001, Math.min(1, fraction));
+  const r = 50.5, c = 2 * Math.PI * r, f = Math.max(0.001, Math.min(1, fraction)), id = `ring-grad-${++ringSeq}`;
   return `<svg viewBox="0 0 112 112">
+    <defs><linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="112" y1="0" x2="0" y2="112">
+      <stop offset="0" style="stop-color:color-mix(in srgb, var(--c) 45%, white)"/>
+      <stop offset="0.55" style="stop-color:var(--c)"/>
+      <stop offset="1" style="stop-color:color-mix(in srgb, var(--c) 80%, black)"/>
+    </linearGradient></defs>
     <circle cx="56" cy="56" r="${r}" fill="none" stroke="rgba(var(--ink),0.12)" stroke-width="11"/>
-    <circle cx="56" cy="56" r="${r}" fill="none" stroke="var(--c)" stroke-width="11" stroke-linecap="round"
+    <circle class="ring-arc" cx="56" cy="56" r="${r}" fill="none" stroke="url(#${id})" stroke-width="11" stroke-linecap="round"
       stroke-dasharray="${c * f} ${c}"/></svg>`;
 }
 
-function workPoints(ev) {
+function workPoints(ev, { compact = false } = {}) {
   const longest = ev.windows.at(-1);
   return `
   <div class="panel workpoints">
     <div class="panel-title"><span class="pi blue">${icon("chart-column")}</span> Work Points Progress
       ${longest ? `<span class="muted" style="font-size:14px;font-weight:400">Since ${Day.short(longest.since)}</span>` : ""}</div>
-    <div class="cards">${ev.windows.map((w) => windowCard(w, ev.asOf)).join("")}</div>
+    <div class="cards">${ev.windows.map((w) => windowCard(w, ev.asOf, { compact })).join("")}</div>
   </div>`;
 }
 
-function windowCard(w, asOfDay) {
+/** compact (desktop Home): ring, points to go and the next drop-off. Full (phone): oldest point, type and drop-off. */
+function windowCard(w, asOfDay, { compact = false } = {}) {
   const sev = E.severity(w.rule, w.eligible);
   const frac = w.rule.threshold > 0 ? w.eligible / w.rule.threshold : 0;
   return `
@@ -1183,7 +1219,10 @@ function windowCard(w, asOfDay) {
     ${w.earned ? `<b class="red">Reprimand earned</b>` : `<div>${pts(w.remaining)} until reprimand</div>`}
     ${w.neutralized > 0 ? `<div class="muted" style="font-size:12px">+${E.fmtPts(w.neutralized)} used in reprimands</div>` : ""}
     <div class="rows">
-      ${w.oldest ? `
+      ${compact ? (w.oldest
+        ? `<div class="next-drop"><span class="nd-cap">${icon("clock")} Next drop-off</span><b>${Day.short(w.dropsOff)}</b><span class="muted">${E.relative(w.dropsOff, asOfDay)}</span></div>`
+        : `<div class="next-drop">${icon("circle-check")}<span>No active points</span></div>`)
+      : w.oldest ? `
         <div class="irow ir-oldest">${icon("calendar")}<div><div class="cap">Oldest point</div><div class="val">${Day.short(Day.parse(w.oldest.date))}</div></div></div>
         <div class="irow ir-type" style="align-items:center">${icon(TYPE_ICON[w.oldest.type])}<div class="val">${esc(E.displayType(w.oldest))}</div></div>
         <div class="irow ir-drop">${icon("clock")}<div><div class="cap">Drops off</div><div class="val">${Day.short(w.dropsOff)}</div><div class="muted" style="font-size:13px">(${E.relative(w.dropsOff, asOfDay)})</div></div></div>
@@ -1193,6 +1232,58 @@ function windowCard(w, asOfDay) {
         .map((d) => `<div class="warn-small">${icon("circle-alert")}<span>${Day.short(Day.parse(d.entry.date))} point dropped off ${E.relative(d.droppedOn, asOfDay)}. Double-check CastLife.
           <button class="confirm-btn" data-action="confirm-drop" data-key="${E.dropOffKey(d.entry.id, w.rule.id)}" title="Dismiss once you've confirmed it in CastLife">${icon("check")} Confirm</button></span></div>`).join("")}
     </div>
+  </div>`;
+}
+
+/**
+ * Desktop Home: reprimands and a few headline numbers in one card, with nothing repeated elsewhere on Home:
+ * a ring counting down to when the current reprimands expire, three stat tiles (days completed of that
+ * period, total points in the longest window, days since the last call-in), then how many reprimands are
+ * in effect against the termination limit, with the warning.
+ */
+function reprimandHero(ev) {
+  const limit = ev.settings.terminationAt, count = ev.activeCount, danger = count >= limit - 1, g = ev.activeGroup;
+  const msg = count >= limit
+    ? [`Termination threshold reached.`, `${count} reprimands are in effect.`]
+    : [`Termination at ${limit} reprimands.`, count === limit - 1 ? "The next reprimand ends employment." : `${limit - 1 - count} more before the final warning.`];
+  const tile = (ic, color, value, label, sub = "", action = "") =>
+    `<${action ? `button data-action="${action}"` : "div"} class="stat-tile c-${color}"><span class="st-icon">${icon(ic)}</span>
+      <span class="st-text"><span class="st-value">${value}</span><span class="st-label">${label}</span>${sub ? `<span class="st-sub">${sub}</span>` : ""}</span>
+    </${action ? "button" : "div"}>`;
+
+  // 1. The current reprimand period.
+  let ringPart, periodTile;
+  if (g) {
+    const left = g.expires - ev.asOf, total = Math.max(1, g.expires - g.latestSigned);
+    const dayN = Math.min(total, ev.asOf - g.latestSigned + 1);
+    ringPart = `<div class="ring rh-ring">${ring(dayN / total)}
+      <div class="label"><div class="rh-days">${left}</div><div class="rh-unit">${left === 1 ? "day" : "days"}</div><div class="muted rh-cap">until they expire</div></div></div>`;
+    periodTile = tile("circle-check", "green", `${dayN}<small> / ${total}</small>`, "Days completed",
+      `${g.reprimands.length > 1 ? "All expire" : "Expires"} ${Day.short(g.expires)}`, "expire-details");
+  } else {
+    ringPart = `<div class="ring rh-ring">${ring(0)}
+      <div class="label">${icon("circle-check")}<div class="muted rh-cap">None in effect</div></div></div>`;
+    periodTile = tile("circle-check", "green", "—", "No reprimand period", "Nothing to count down");
+  }
+  // 2. Every point in the longest window, including ones a reprimand used.
+  const longest = ev.windows.at(-1);
+  const totalPts = longest ? longest.eligible + longest.neutralized : 0;
+  const ptsTile = tile("layers", "amber", E.fmtPts(totalPts), "Total points", longest ? `In the last ${longest.rule.days} days` : "");
+  // 3. Days since the last call-in.
+  const lastCall = ev.entries.filter((e) => (e.type === "callSick" || e.type === "callPersonal") && Day.parse(e.date) <= ev.asOf).at(-1);
+  const since = lastCall ? ev.asOf - Day.parse(lastCall.date) : null;
+  const callTile = lastCall
+    ? tile("calendar-check", "blue", since === 0 ? "Today" : String(since), since === 0 ? "Last call-in" : since === 1 ? "Day since last call-in" : "Days since last call-in", Day.short(Day.parse(lastCall.date)))
+    : tile("calendar-check", "blue", "—", "No call-ins yet");
+
+  return `
+  <div class="panel rep-hero ${danger ? "c-red" : "c-blue"}">
+    <div class="rh-top">${ringPart}<div class="rh-tiles">${periodTile}${ptsTile}${callTile}</div></div>
+    <div class="rh-count"><span class="pi ${danger ? "red" : "blue"}">${icon("triangle-alert")}</span>
+      <span class="num"><span class="${danger ? "red" : ""}">${count}</span> / ${limit}</span><span class="rh-label">Reprimands in effect</span>
+      <span class="spacer"></span><div class="dots">${Array.from({ length: limit }, (_, i) => `<div class="dot ${i < count ? "on" : ""}"></div>`).join("")}</div></div>
+    <div class="rep-warn ${danger ? "danger" : ""}">${icon(danger ? "triangle-alert" : "info")}
+      <div><b class="${danger ? "red" : ""}">${msg[0]}</b><div class="${danger ? "red" : "muted"}" style="opacity:.85">${msg[1]}</div></div></div>
   </div>`;
 }
 
@@ -3043,6 +3134,7 @@ tauri?.webview?.getCurrentWebview?.().onDragDropEvent((event) => {
 
 let lastSide = null;
 let lastMobile = isMobile();
+addEventListener("resize", () => placeNavIndicator({ animate: false }));
 addEventListener("resize", async () => {
   if (isMobile() !== lastMobile) { lastMobile = isMobile(); return render(); }
   if (isMobile()) return;

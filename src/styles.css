@@ -1365,3 +1365,287 @@ body.mobile .banner > span:not(.spacer):not(.banner-actions) { color: var(--text
 body.mobile .banner > span:not(.spacer):not(.banner-actions) b { display: block; color: var(--text); font: 700 16px var(--font-head); margin-bottom: 2px; }
 body.mobile .banner-actions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 body.mobile .banner-actions > button { justify-content: center; padding-block: 10px; font-size: 14px; }
+
+/* Indicators: rings, reprimand dots, the leave timeline and carousel dots in the same gradient-and-gloss
+   style as the buttons and cards. */
+.ring-arc { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--c) 55%, transparent)); }
+/* Reprimand markers: rounded parallelograms (rounded boxes slanted with skewX), so outlines and glows work.
+   Filled ones glow in the red gradient; empty ones are dark glass with an outline. */
+.dots { gap: var(--dg); --dw: 44px; --dh: 26px; --dg: 9px; padding: 0 6px; }
+body .dots .dot {
+  width: var(--dw); height: var(--dh); border-radius: 7px; transform: skewX(-22deg); clip-path: none; margin: 0;
+  background: color-mix(in srgb, var(--panel) 60%, transparent); border: 1.5px solid rgba(var(--ink), 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+body .dots .dot.on {
+  border: 1px solid color-mix(in srgb, var(--red) 60%, white);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--red) 70%, white) 0%, var(--red) 45%, color-mix(in srgb, var(--red) 82%, black) 100%);
+  box-shadow: 0 0 16px -2px color-mix(in srgb, var(--red) 80%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+@media (max-height: 960px) { .dots { --dw: 38px; --dh: 22px; --dg: 8px; } }
+body.mobile .dots { --dw: 26px; --dh: 18px; --dg: 6px; gap: var(--dg); padding: 0 4px; }
+body.mobile .btn-subtle, body.mobile .btn-primary { white-space: nowrap; }
+.tl-fill.blue { background: var(--grad-primary); box-shadow: 0 0 10px -2px rgba(31, 200, 255, 0.55); }
+.tl-fill.amber {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--amber) 70%, white), var(--amber) 60%, color-mix(in srgb, var(--amber) 85%, #ff6a00));
+  box-shadow: 0 0 10px -2px color-mix(in srgb, var(--amber) 70%, transparent);
+}
+.tl-dot { box-shadow: 0 0 10px -2px color-mix(in srgb, var(--dotc, var(--blue)) 70%, transparent); }
+.tl-dot.blue { --dotc: var(--blue); background: radial-gradient(circle at 35% 30%, #8fd8ff, var(--blue) 60%); }
+.tl-dot.amber { --dotc: var(--amber); background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--amber) 45%, white), var(--amber) 60%); }
+.tl-dot.end.done { --dotc: var(--teal); background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--teal) 45%, white), var(--teal) 60%); }
+.m-dots span.on, .lc-dots span.on { background: var(--grad-primary); box-shadow: 0 0 8px -1px rgba(38, 120, 250, 0.7); }
+
+/* ==========================================================================
+   Desktop layout: header across the top, a slim icon sidebar on the left, and the page beside it.
+   Home leads with one Reprimand Status card (count, warning and expiry countdown together) next to
+   Work Points Progress, whose cards are slanted and compact.
+   ========================================================================== */
+body:not(.mobile) .header { padding-bottom: 14px; }
+.shell { flex: 1; min-height: 0; display: flex; }
+.shell > .page { flex: 1; min-width: 0; padding-left: 14px; }
+
+.sidebar {
+  flex: none; width: 72px; margin: 16px 0 12px var(--gutter); padding: 10px 8px;
+  display: flex; flex-direction: column; gap: 6px; border-radius: 24px;
+  background: var(--sheen), var(--panel-glass); border: 1px solid var(--glass-edge); box-shadow: var(--panel-lift);
+}
+.sidebar button {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0 8px; border: 0; border-radius: 16px;
+  background: none; color: var(--text2); font: 600 10.5px var(--font-head); letter-spacing: 0.01em;
+}
+.sidebar button svg { width: 22px; height: 22px; }
+.sidebar button:hover { background: var(--glass-btn-hover); color: var(--text); }
+.sidebar button.on { background: var(--grad-primary); color: #fff; box-shadow: var(--glow-primary); }
+
+/* Reprimand Status (Home). */
+.top { align-items: stretch; }
+.rep-hero {
+  flex: 0 0 auto; width: clamp(470px, 41%, 660px); display: flex; align-items: center; gap: 20px; padding: 18px 20px;
+  background: var(--sheen), linear-gradient(135deg, color-mix(in srgb, var(--c) 16%, transparent), color-mix(in srgb, var(--c) 4%, transparent)), var(--panel-glass);
+  border-color: color-mix(in srgb, var(--c) 45%, transparent);
+}
+.rep-hero .rh-ring { --c: #1fa8ff; width: 156px; height: 156px; flex: none; }
+.rep-hero .rh-ring .label { gap: 0; }
+.rep-hero .rh-ring .label > svg { width: 30px; height: 30px; color: var(--green); margin: 0 auto 4px; }
+.rh-days { font: 700 48px/1 var(--font-num); }
+.rh-unit {
+  font: 700 19px/1.1 var(--font-head);
+  background: linear-gradient(90deg, #1fc8ff, #7b5cff); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.rh-cap { font-size: 12px; margin-top: 2px; }
+.rh-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.rh-count { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+.rh-count > .num, .rh-label { white-space: nowrap; }
+.rep-hero .dots { --dw: 34px; --dh: 22px; --dg: 7px; }
+.rh-count .num { font-size: 40px; line-height: 1; }
+.rh-label { font: 600 18px var(--font-head); color: var(--text2); }
+.rep-hero .rep-warn { border-radius: 14px; }
+.rep-hero .rep-warn.danger { background: color-mix(in srgb, var(--red) 16%, transparent); border: 1px solid color-mix(in srgb, var(--red) 40%, transparent); }
+.rh-when { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.rh-when > svg { color: var(--blue); width: 16px; height: 16px; flex: none; }
+.rh-when .btn-subtle { margin-left: auto; }
+
+/* Work Points Progress: slanted, compact cards (content kept upright). */
+.top > .workpoints { flex: 1; min-width: 0; }
+body:not(.mobile) .cards { padding: 2px 14px 6px; }
+body:not(.mobile) .cards > .wcard { padding-bottom: 22px; }
+.next-drop { display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 12.5px; text-align: center; line-height: 1.3; }
+.next-drop > svg { width: 18px; height: 18px; color: var(--green); }
+.next-drop .nd-cap { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.04em; }
+.next-drop .nd-cap svg { width: 12px; height: 12px; }
+.next-drop b { font-size: 13.5px; }
+body:not(.mobile) .top .cards > .wcard { flex: 1 0 150px; }
+
+/* Layout tuning: the sidebar's buttons spread evenly down its height; the Reprimand Status card fills its
+   height (bigger ring, content spread top to bottom); the slanted cards get room for their slant and
+   never show a scrollbar (they still scroll with a wheel or trackpad when the window is narrow). */
+.sidebar { justify-content: space-evenly; }
+.rep-hero { align-items: stretch; }
+.rep-hero .rh-ring { width: clamp(156px, 12vw, 196px); height: auto; aspect-ratio: 1; align-self: center; }
+.rep-hero .rh-days { font-size: clamp(48px, 3.6vw, 60px); }
+.rep-hero .rh-unit { font-size: clamp(19px, 1.5vw, 23px); }
+.rh-body { justify-content: space-between; padding: 4px 0; }
+body:not(.mobile) .top .cards { padding: 2px 2px 4px; scrollbar-width: none; }
+body:not(.mobile) .top .cards::-webkit-scrollbar { display: none; }
+body:not(.mobile) .top .cards > .wcard { gap: 7px; padding-top: 12px; padding-bottom: 16px; background-size: auto, 100% 58px, auto; }
+
+/* Reprimand card with stat tiles: [ring | three tiles] on top, then the count with markers and the warning. */
+.rep-hero { flex-direction: column; align-items: stretch; justify-content: space-between; gap: 14px; }
+.rh-top { display: flex; align-items: center; gap: 18px; }
+.rh-tiles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.stat-tile {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 12px; border-radius: 16px; text-align: left; color: var(--text);
+  background: var(--sheen), color-mix(in srgb, var(--c) 7%, var(--panel-glass)); border: 1px solid color-mix(in srgb, var(--c) 30%, var(--glass-edge));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+button.stat-tile { font: inherit; cursor: pointer; }
+button.stat-tile:hover { border-color: color-mix(in srgb, var(--c) 60%, transparent); box-shadow: 0 4px 14px -6px color-mix(in srgb, var(--c) 60%, transparent); }
+.st-icon {
+  flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: #fff;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--c) 60%, white), var(--c) 55%, color-mix(in srgb, var(--c) 80%, black));
+  box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--c) 70%, transparent);
+}
+.st-icon svg { width: 21px; height: 21px; }
+.st-text { min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.st-value { font: 700 23px/1.1 var(--font-num); white-space: nowrap; }
+.st-value small { font-size: 15px; font-weight: 600; color: var(--text2); }
+.st-label { font-size: 12.5px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-sub { font-size: 11.5px; color: var(--text2); opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rh-count { flex-wrap: nowrap; }
+.rh-count .pi { font-size: 22px; }
+.rh-count .num { font-size: 32px; }
+.rh-label { font-size: 15px; }
+
+/* ==========================================================================
+   Sidebar, icon only, in frosted glass. The page name slides in beside an icon after a short hover.
+   ========================================================================== */
+.sidebar {
+  position: relative; z-index: 5; width: 60px; padding: 12px 8px; align-items: center; border-radius: 30px;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.02) 40%, rgba(255, 255, 255, 0) 70%),
+    color-mix(in srgb, var(--panel) 55%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.10); border-top-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 18px 40px -20px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(22px) saturate(160%); -webkit-backdrop-filter: blur(22px) saturate(160%);
+}
+[data-theme="light"] .sidebar {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.6)); border-color: rgba(30, 60, 120, 0.12);
+  box-shadow: 0 16px 36px -20px rgba(20, 45, 95, 0.35), inset 0 1px 0 #fff;
+}
+.sidebar button {
+  position: relative; width: 44px; height: 44px; padding: 0; gap: 0; justify-content: center; border-radius: 14px;
+  border: 1px solid transparent; color: var(--text2); transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.sidebar button svg { width: 21px; height: 21px; }
+.sidebar button:hover { background: rgba(var(--ink), 0.07); color: var(--text); }
+/* Current page: a tile of blue glass lit from above. One even, slightly see-through blue body (no shading
+   across it); light comes from the bright rim (strongest along the top, fading down the sides), a faint
+   glow just inside the edges, a soft light spot in the top-left corner and a little depth at the bottom. */
+.sidebar button.on {
+  color: #fff; border-radius: 6px; border: 1px solid transparent;
+  background:
+    radial-gradient(55% 45% at 24% 14%, rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0) 70%) padding-box,
+    linear-gradient(rgba(28, 122, 255, 0.82), rgba(28, 122, 255, 0.82)) padding-box,
+    linear-gradient(180deg, rgba(235, 248, 255, 0.95) 0%, rgba(140, 200, 255, 0.55) 45%, rgba(90, 165, 255, 0.75) 100%) border-box;
+  box-shadow:
+    0 0 24px -4px rgba(40, 140, 255, 0.9),
+    0 8px 18px -10px rgba(0, 30, 120, 0.7),
+    inset 0 1px 1px rgba(255, 255, 255, 0.6),
+    inset 0 0 14px rgba(150, 215, 255, 0.45),
+    inset 0 -6px 12px rgba(0, 40, 140, 0.3);
+  backdrop-filter: blur(8px) saturate(180%); -webkit-backdrop-filter: blur(8px) saturate(180%);
+}
+.sidebar button.on svg { filter: drop-shadow(0 1px 2px rgba(0, 20, 90, 0.45)); }
+[data-theme="light"] .sidebar button.on { color: #fff; }
+/* The name, in a small glass label beside the icon after about half a second of hovering. */
+.sb-tip {
+  position: absolute; left: calc(100% + 14px); top: 50%; transform: translate(-6px, -50%); opacity: 0; pointer-events: none;
+  white-space: nowrap; padding: 6px 12px; border-radius: 999px; font: 600 13px var(--font-head); color: var(--text);
+  background: var(--pop-glass); border: 1px solid var(--glass-edge); box-shadow: var(--pop-shadow);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  transition: opacity 0.12s, transform 0.12s; transition-delay: 0s;
+}
+.sidebar button:hover .sb-tip, .sidebar button:focus-visible .sb-tip { opacity: 1; transform: translate(0, -50%); transition-delay: 0.45s; }
+
+/* ==========================================================================
+   Reprimand markers: wider, in modern glass (translucent tint, soft inner glow, bright edge, sheen).
+   ========================================================================== */
+.dots { --dw: 60px; --dh: 26px; --dg: 9px; }
+.rep-hero .dots { --dw: 52px; --dh: 24px; --dg: 8px; }
+@media (max-height: 960px) { .dots { --dw: 50px; --dh: 22px; --dg: 8px; } .rep-hero .dots { --dw: 46px; --dh: 22px; } }
+body.mobile .dots { --dw: 34px; --dh: 18px; --dg: 6px; }
+.rh-count { flex-wrap: wrap; row-gap: 8px; }
+body .dots .dot {
+  border-radius: 8px; border: 1px solid rgba(var(--ink), 0.16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01)), rgba(var(--ink), 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+body .dots .dot.on {
+  border: 1px solid color-mix(in srgb, var(--red) 55%, rgba(255, 255, 255, 0.6));
+  background:
+    radial-gradient(140% 100% at 20% 0%, rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0) 55%),
+    linear-gradient(135deg, color-mix(in srgb, var(--red) 78%, transparent), color-mix(in srgb, #ff2d6f 58%, transparent));
+  box-shadow:
+    0 0 18px -4px color-mix(in srgb, var(--red) 75%, transparent),
+    inset 0 0 10px color-mix(in srgb, var(--red) 45%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+/* Buttons fill the sidebar's width (a thin margin all round), as square tiles. */
+.sidebar { width: 62px; padding: 10px 0; }
+.sidebar button { width: 58px; height: 58px; border-radius: 6px; }
+.sidebar button svg { width: 23px; height: 23px; }
+
+/* ==========================================================================
+   Page transitions: the new page fades in while rising 14px; the sidebar's blue tile glides to the new
+   icon. Both are off with the system's Reduce Motion setting.
+   ========================================================================== */
+@keyframes page-in { from { opacity: 0; transform: translateY(14px); } }
+.page-enter { animation: page-in 1s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+
+/* The tile is a separate layer behind the icons (see placeNavIndicator in app.js); the current page's
+   button itself is transparent so the tile shows through. */
+.sb-ind {
+  position: absolute; top: 0; left: 1px; width: 58px; height: 58px; z-index: 0; pointer-events: none;
+  border-radius: 6px; border: 1px solid transparent;
+  background:
+    radial-gradient(55% 45% at 24% 14%, rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0) 70%) padding-box,
+    linear-gradient(rgba(16, 96, 228, 0.88), rgba(16, 96, 228, 0.88)) padding-box,
+    linear-gradient(180deg, rgba(235, 248, 255, 0.95) 0%, rgba(140, 200, 255, 0.55) 45%, rgba(90, 165, 255, 0.75) 100%) border-box;
+  box-shadow:
+    0 0 24px -4px rgba(40, 140, 255, 0.9),
+    0 8px 18px -10px rgba(0, 30, 120, 0.7),
+    inset 0 1px 1px rgba(255, 255, 255, 0.6),
+    inset 0 0 14px rgba(150, 215, 255, 0.45),
+    inset 0 -6px 12px rgba(0, 40, 140, 0.3);
+  transition: transform 1s cubic-bezier(0.3, 0.9, 0.25, 1);
+}
+.sidebar button { z-index: 1; }
+.sidebar button.on { background: none; border-color: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; color: #fff; }
+.sidebar button.on:hover { background: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter { animation: none; }
+  .sb-ind { transition: none; }
+}
+
+/* Sidebar: card-style corners, icons grouped at the top, and an edge drawn as light: bright along the top,
+   fading down the sides, catching blue light at the bottom (the border is the border-box gradient layer
+   behind a transparent border), with a soft blue glow inside the bottom corner. */
+.sidebar {
+  border-radius: 16px; justify-content: flex-start; gap: 10px; padding: 12px 0;
+  border: 1px solid transparent;
+  background:
+    radial-gradient(90% 22% at 15% 100%, rgba(40, 130, 255, 0.45), rgba(40, 130, 255, 0) 75%) padding-box,
+    linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.015) 40%, rgba(255, 255, 255, 0) 70%) padding-box,
+    linear-gradient(color-mix(in srgb, var(--panel) 62%, transparent), color-mix(in srgb, var(--panel) 62%, transparent)) padding-box,
+    linear-gradient(180deg, rgba(190, 230, 255, 0.75) 0%, rgba(140, 190, 255, 0.18) 18%, rgba(120, 170, 255, 0.07) 55%, rgba(70, 150, 255, 0.35) 85%, rgba(60, 160, 255, 0.95) 100%) border-box;
+  box-shadow: 0 18px 40px -20px rgba(0, 0, 0, 0.7), 0 10px 30px -14px rgba(40, 130, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+[data-theme="light"] .sidebar {
+  background:
+    radial-gradient(90% 22% at 15% 100%, rgba(40, 130, 255, 0.18), rgba(40, 130, 255, 0) 75%) padding-box,
+    linear-gradient(160deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.65)) padding-box,
+    linear-gradient(180deg, rgba(120, 180, 255, 0.55) 0%, rgba(30, 60, 120, 0.10) 20%, rgba(30, 60, 120, 0.08) 70%, rgba(60, 140, 255, 0.6) 100%) border-box;
+}
+.sidebar button svg { width: 26px; height: 26px; }
+/* Stronger light at the bottom (a brighter glow plus a curved streak, like light catching the glass), bigger
+   icons, and room above the first one. */
+.sidebar {
+  padding-top: 22px;
+  background:
+    radial-gradient(150% 34% at 100% 104%, rgba(80, 170, 255, 0) 56%, rgba(110, 190, 255, 0.55) 61%, rgba(80, 170, 255, 0) 67%) padding-box,
+    radial-gradient(110% 30% at 10% 100%, rgba(40, 140, 255, 0.85), rgba(40, 130, 255, 0.25) 55%, rgba(40, 130, 255, 0) 80%) padding-box,
+    linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.015) 40%, rgba(255, 255, 255, 0) 70%) padding-box,
+    linear-gradient(color-mix(in srgb, var(--panel) 62%, transparent), color-mix(in srgb, var(--panel) 62%, transparent)) padding-box,
+    linear-gradient(180deg, rgba(190, 230, 255, 0.75) 0%, rgba(140, 190, 255, 0.18) 18%, rgba(120, 170, 255, 0.07) 50%, rgba(70, 150, 255, 0.5) 80%, rgba(90, 180, 255, 1) 100%) border-box;
+  box-shadow: 0 18px 40px -20px rgba(0, 0, 0, 0.7), 0 14px 34px -10px rgba(40, 130, 255, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+[data-theme="light"] .sidebar {
+  background:
+    radial-gradient(110% 30% at 10% 100%, rgba(40, 140, 255, 0.35), rgba(40, 130, 255, 0) 80%) padding-box,
+    linear-gradient(160deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.65)) padding-box,
+    linear-gradient(180deg, rgba(120, 180, 255, 0.55) 0%, rgba(30, 60, 120, 0.10) 20%, rgba(30, 60, 120, 0.08) 65%, rgba(60, 140, 255, 0.8) 100%) border-box;
+}
+.sidebar button svg { width: 30px; height: 30px; }
