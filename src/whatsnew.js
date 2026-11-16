@@ -8,6 +8,13 @@
 
 export const NOTES = [
   {
+    version: "2.3.1",
+    also: [
+      "A new Point Tracker wordmark in the header, on the computer and the phone.",
+      "The sidebar shows the version and build number under Settings and About.",
+    ],
+  },
+  {
     version: "2.3.0",
     features: [
       {

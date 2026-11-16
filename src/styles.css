@@ -1651,16 +1651,12 @@ body .dots .dot.on {
 .sidebar button svg { width: 30px; height: 30px; }
 
 /* ==========================================================================
-   Sidebar sections: pages at the top, Settings and About at the bottom, then the logo and version over
-   the glow. The groups aren't positioned, so the gliding tile still measures from the sidebar itself.
+   Sidebar sections: pages at the top, Settings and About at the bottom, over the glow. The groups aren't positioned, so the gliding tile still measures from the sidebar itself.
    ========================================================================== */
-.sidebar { gap: 0; padding-bottom: 12px; }
+.sidebar { gap: 0; padding-bottom: 16px; }
 .sb-group { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .sb-div { width: 36px; border: 0; border-top: 1px solid rgba(var(--ink), 0.14); margin: 14px 0; flex: none; }
 .sb-fill { flex: 1; min-height: 8px; }
-.sb-brand { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 16px; position: relative; z-index: 1; }
-.sb-brand img { width: 40px; height: auto; filter: drop-shadow(0 4px 12px rgba(40, 140, 255, 0.55)); }
-.sb-brand span { font: 600 9.5px var(--font-head); color: var(--text2); text-align: center; line-height: 1.2; letter-spacing: 0.02em; }
 
 /* ==========================================================================
    Call-ins and Reprimands pages (desktop).
@@ -1684,12 +1680,10 @@ body .dots .dot.on {
 .rules-panel li::marker { color: var(--blue); }
 .rules-note { display: flex; align-items: center; gap: 6px; font-size: 12.5px; margin-top: auto; }
 .rules-note svg { width: 14px; height: 14px; }
-/* Short windows (laptops, Linux with a taskbar): tighter spacing, and the logo footer gives way (the logo
-   is in the header anyway), so every button still fits. */
+/* Short windows (laptops, Linux with a taskbar): tighter spacing, so every button still fits. */
 @media (max-height: 820px) {
   .sb-group { gap: 4px; }
   .sb-div { margin: 8px 0; }
-  .sb-brand { display: none; }
   .sidebar { padding-top: 14px; }
 }
 .rh-pct { margin-top: 4px; font: 600 12.5px var(--font-head); color: var(--text2); }
@@ -1724,3 +1718,20 @@ body .dots .dot.on {
 .wm-count { grid-area: count; font-size: 18px; text-align: right; white-space: nowrap; }
 .wm-count small { font-size: 13px; color: var(--text2); }
 .wm-note { grid-area: note; font-size: 12.5px; }
+/* The version, small, at the foot of the sidebar. */
+.sb-ver { margin-top: 12px; font: 600 9.5px var(--font-head); color: var(--text2); text-align: center; line-height: 1.2; letter-spacing: 0.02em; position: relative; z-index: 1; }
+.sb-build { margin-top: 2px; font: 500 8px var(--font-num); color: var(--text2); opacity: 0.75; text-align: center; letter-spacing: 0.02em; position: relative; z-index: 1; }
+
+/* Header wordmark (desktop): the dark-theme image has a white "Point"; light theme uses a navy one. */
+.wordmark { height: 40px; width: auto; display: block; pointer-events: none; filter: drop-shadow(0 2px 10px rgba(30, 120, 255, 0.35)); }
+.wm-light { display: none; }
+[data-theme="light"] .wm-dark { display: none; }
+[data-theme="light"] .wm-light { display: block; filter: none; }
+
+/* The logo back at the foot of the sidebar, above the version and build (hidden on short windows). */
+.sb-logo { width: 40px; height: auto; margin-top: 14px; position: relative; z-index: 1; filter: drop-shadow(0 4px 12px rgba(40, 140, 255, 0.5)); }
+.sb-logo + .sb-ver { margin-top: 6px; }
+@media (max-height: 820px) { .sb-logo { display: none; } .sb-ver { margin-top: 12px; } }
+/* Phone header: logo, then the wordmark with the badges in a row beneath it. */
+.m-title-wrap .wordmark { height: 22px; max-width: 100%; object-fit: contain; object-position: left center; }
+.m-badges { display: flex; gap: 5px; }

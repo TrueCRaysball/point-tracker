@@ -1109,10 +1109,10 @@ function expandedTable(ev) {
 }
 
 const NAV = [["overview", "house", "Home"], ["calendar", "calendar-days", "Calendar"], ["callins", "phone", "Call-ins"], ["reprimands", "gavel", "Reprimands"], ["leaves", "pt-leave", "Leaves"]];
-/** Desktop navigation: a slim glass column of icons; each page's name appears beside its icon on hover. */
+/** Desktop navigation: a slim glass column of icons (pages at the top, Settings and About at the bottom); each name appears beside its icon on hover. */
 const SIDEBAR_WIDTH = 86;
 let lastPage = null;
-let appVer = null; // filled in once at startup (see the end of this file), for the sidebar's footer
+let appVer = null, appBuild = null; // filled in once at startup (see the end of this file), for the foot of the sidebar
 function sidebar() {
   const pageBtn = ([id, ic, label]) => `<button class="${ui.page === id ? "on" : ""}" data-action="page" data-page="${id}" aria-label="${label}">${icon(ic)}<span class="sb-tip" aria-hidden="true">${label}</span></button>`;
   return `<nav class="sidebar" aria-label="Pages"><span class="sb-ind" aria-hidden="true"></span>
@@ -1120,7 +1120,9 @@ function sidebar() {
     <hr class="sb-div"><span class="sb-fill"></span><hr class="sb-div">
     <div class="sb-group">${pageBtn(["settings", "settings", "Settings"])}
       <button data-action="about" aria-label="About Point Tracker">${icon("info")}<span class="sb-tip" aria-hidden="true">About</span></button></div>
-    <div class="sb-brand"><img src="vendor/logo.png" alt="" draggable="false"><span id="sb-ver">${appVer ? esc(W.versionName(appVer)) : ""}</span></div>
+    <img class="sb-logo" src="vendor/logo.png" alt="" draggable="false">
+    <span class="sb-ver" id="sb-ver">${appVer ? esc(W.versionName(appVer)) : ""}</span>
+    <span class="sb-build" id="sb-build">${appBuild ? esc(appBuild) : ""}</span>
   </nav>`;
 }
 
@@ -1149,11 +1151,8 @@ function hero() {
   <div class="hero" data-tauri-drag-region>
     <div class="hero-art" data-tauri-drag-region></div>
     <div class="header ${IS_MAC && !ui.fullscreen ? "mac-lights" : ""}" data-tauri-drag-region>
-      <img class="logo" src="vendor/logo.png" alt="" draggable="false">
-      <div data-tauri-drag-region>
-        <div class="title">Point Tracker</div>
-        <div class="subtitle">Attendance Points and Reprimands</div>
-      </div>
+      <img class="wordmark wm-dark" src="vendor/wordmark-dark.png" alt="Point Tracker" draggable="false" data-tauri-drag-region>
+      <img class="wordmark wm-light" src="vendor/wordmark-light.png" alt="Point Tracker" draggable="false" data-tauri-drag-region>
       ${betaBadge()}
       ${env.demo ? `<span class="badge">DEMO · Sample data</span>` : ""}
       <span class="spacer" data-tauri-drag-region></span>
@@ -2154,7 +2153,10 @@ function mHeader() {
     <div class="hero-art"></div>
     <div class="m-head-row">
       <img class="logo" src="vendor/logo.png" alt="" draggable="false">
-      <div class="m-title-wrap"><div class="title">Point Tracker</div>${betaBadge()}${env.demo ? `<span class="badge">DEMO</span>` : ""}</div>
+      <div class="m-title-wrap">
+        <img class="wordmark wm-dark" src="vendor/wordmark-dark.png" alt="Point Tracker" draggable="false">
+        <img class="wordmark wm-light" src="vendor/wordmark-light.png" alt="Point Tracker" draggable="false">
+        <span class="m-badges">${betaBadge()}${env.demo ? `<span class="badge">DEMO</span>` : ""}</span></div>
       <span class="spacer"></span>
       <button class="m-date ${over ? "override" : ""}" data-action="calendar">${icon("calendar")} ${MONTH_NAMES[d.m].slice(0, 3)} ${d.d}</button>
       <button class="m-iconbtn ${ui.mpage === "settings" ? "on" : ""}" data-action="m-page" data-page="settings" aria-label="Settings">${icon("settings")}</button>
@@ -3381,4 +3383,7 @@ lastSide = sideBySide();
 initSync();
 if (tauri) setupDesktopUpdates();
 appVersion().then((v) => { appVer = v; const el = document.getElementById("sb-ver"); if (el) el.textContent = W.versionName(v); }).catch(() => {});
+// The build number of the code that's running (desktop: compiled in; web: stamped into app-version.js).
+(tauri ? tauri.core.invoke("app_info").then((i) => i.build) : import("./app-version.js").then((m) => m.default.build))
+  .then((b) => { appBuild = b; const el = document.getElementById("sb-build"); if (el) el.textContent = b; }).catch(() => {});
 maybeShowIntro().then((shown) => { if (!shown) maybeShowWhatsNew(); });
